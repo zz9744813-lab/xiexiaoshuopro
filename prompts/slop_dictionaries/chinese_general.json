@@ -1,0 +1,27 @@
+{
+  "id": "chinese_general",
+  "name": "通用中文 AI 味词典",
+  "version": 1,
+  "patterns": [
+    { "pattern": "不禁", "category": "ai_tell", "replacement": "删除或用具体动作替代" },
+    { "pattern": "不由自主", "category": "ai_tell", "replacement": "删除或用具体动作替代" },
+    { "pattern": "眼中闪烁着", "category": "empty_emotion", "replacement": "用具体的眼神描写替代" },
+    { "pattern": "嘴角微微上扬", "category": "cliche", "replacement": "用更具体的表情描写" },
+    { "pattern": "心中一动", "category": "ai_tell", "replacement": "用外在表现暗示内心" },
+    { "pattern": "暗自思忖", "category": "over_explain", "replacement": "直接展示思考内容" },
+    { "pattern": "一股暖流", "category": "empty_emotion", "replacement": "用具体感受替代" },
+    { "pattern": "复杂的情绪", "category": "empty_emotion", "replacement": "具体描述是什么情绪" },
+    { "pattern": "若有所思", "category": "ai_tell", "replacement": "展示在思考什么" },
+    { "pattern": "意味深长", "category": "over_explain", "replacement": "让读者自己判断" },
+    { "pattern": "不可思议", "category": "over_explain", "replacement": "展示具体反应" },
+    { "pattern": "仿佛.*一般", "category": "cliche", "is_regex": true, "replacement": "直接描写" },
+    { "pattern": "宛如.*似的", "category": "cliche", "is_regex": true, "replacement": "直接描写" },
+    { "pattern": "犹如.*一样", "category": "cliche", "is_regex": true, "replacement": "直接描写" },
+    { "pattern": "深吸一口气", "category": "repetition", "replacement": "换一种表达紧张/准备的方式" },
+    { "pattern": "眉头微皱", "category": "repetition", "replacement": "用其他方式表达困惑/不满" },
+    { "pattern": "嘴角勾起一抹", "category": "cliche", "replacement": "用更自然的笑容描写" },
+    { "pattern": "目光如炬", "category": "cliche", "replacement": "具体描写眼神" },
+    { "pattern": "心头一紧", "category": "ai_tell", "replacement": "用外在反应表现" },
+    { "pattern": "浑身一震", "category": "repetition", "replacement": "用更具体的身体反应" }
+  ]
+}
