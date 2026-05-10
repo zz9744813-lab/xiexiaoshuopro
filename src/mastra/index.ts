@@ -8,6 +8,12 @@ import { chapterOutlineAgent } from './agents/chapter-outline'
 import { bibleExtractAgent } from './agents/bible-extract'
 import { hookAgent } from './agents/hook'
 import { sectionRewriterAgent } from './agents/section-rewriter'
+import { directorAgent } from './agents/director'
+import { narratorAgent } from './agents/narrator'
+import {
+  logicReviewer, voiceReviewer, canonReviewer, pacingReviewer,
+  themeReviewer, genreReviewer, readerSimulator, slopReviewer,
+} from './agents/reviewers'
 
 export const mastra = new Mastra({
   agents: {
@@ -19,5 +25,15 @@ export const mastra = new Mastra({
     bibleExtract: bibleExtractAgent,
     hook: hookAgent,
     sectionRewriter: sectionRewriterAgent,
+    director: directorAgent,
+    narrator: narratorAgent,
+    logicReviewer,
+    voiceReviewer,
+    canonReviewer,
+    pacingReviewer,
+    themeReviewer,
+    genreReviewer,
+    readerSimulator,
+    slopReviewer,
   },
 })

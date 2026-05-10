@@ -15,10 +15,11 @@ describe('Prompts', () => {
     expect(result).toBe('王某 说了话。王某 又说了话。')
   })
 
-  it('renderPrompt 未提供的变量保持原样', () => {
+  it('renderPrompt 未提供的变量被清理（避免 LLM 看到占位符）', () => {
     const template = '{{ name }} 和 {{ unknown }}'
     const result = renderPrompt(template, { name: '张某' })
-    expect(result).toBe('张某 和 {{ unknown }}')
+    expect(result).toBe('张某 和 ')
+    expect(result).not.toContain('{{')
   })
 
   it('parseFrontmatter 解析正确', () => {

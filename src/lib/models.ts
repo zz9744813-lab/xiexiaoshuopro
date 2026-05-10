@@ -1,37 +1,40 @@
 // lib/models.ts - LLM Provider 抽象层
 import { createOpenAI } from '@ai-sdk/openai'
 
-// DeepSeek (OpenAI 兼容协议)
-const deepseek = createOpenAI({
+// 主力 Provider（通过环境变量配置 baseURL 和 key）
+const primaryProvider = createOpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY || '',
-  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
+  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
 })
 
-// Qwen (OpenAI 兼容协议)
+// 模型 ID 也从环境变量读取，默认 deepseek-chat
+const PRIMARY_MODEL = process.env.LLM_MODEL_ID || 'deepseek-chat'
+
+// Qwen (备用)
 const qwen = createOpenAI({
   apiKey: process.env.QWEN_API_KEY || '',
   baseURL: process.env.QWEN_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
 })
 
-// 自部署 Qwen (兜底)
+// 自部署 (兜底)
 const selfHostedQwen = createOpenAI({
   apiKey: 'not-needed',
   baseURL: process.env.SELF_HOSTED_QWEN_URL || 'http://localhost:8000/v1',
 })
 
-// OpenRouter (应急通道)
+// OpenRouter (应急)
 const openrouter = createOpenAI({
   apiKey: process.env.OPENROUTER_API_KEY || '',
   baseURL: 'https://openrouter.ai/api/v1',
 })
 
-// 模型实例（provider 只接受 modelId，temperature/maxTokens 在 streamText 时传）
+// 模型工厂
 export function deepseekChat() {
-  return deepseek('minimaxai/minimax-m2.5')
+  return primaryProvider(PRIMARY_MODEL)
 }
 
 export function deepseekReasoner() {
-  return deepseek('minimaxai/minimax-m2.5')
+  return primaryProvider(process.env.LLM_REASONER_MODEL_ID || PRIMARY_MODEL)
 }
 
 export function qwenMax() {
@@ -46,7 +49,7 @@ export function openrouterModel(model: string) {
   return openrouter(model)
 }
 
-// 路由策略：根据任务类型和安全级别选择模型 + 推荐参数
+// 路由策略
 export type ModelTask = 'draft' | 'outline' | 'review' | 'summary' | 'simulation' | 'rewrite' | 'extract'
 
 export interface ModelConfig {
@@ -56,7 +59,6 @@ export interface ModelConfig {
 }
 
 export function getModelForTask(task: ModelTask, safetyLevel: string = 'normal'): ModelConfig {
-  // unrestricted 模式优先用自部署
   if (safetyLevel === 'unrestricted') {
     if (process.env.SELF_HOSTED_QWEN_URL) {
       return { model: qwenSelfHosted(), temperature: task === 'draft' ? 0.85 : 0.7, maxTokens: 8000 }
@@ -66,7 +68,6 @@ export function getModelForTask(task: ModelTask, safetyLevel: string = 'normal')
     }
   }
 
-  // 默认路由
   switch (task) {
     case 'draft':
       return { model: deepseekChat(), temperature: 0.85, maxTokens: 12000 }

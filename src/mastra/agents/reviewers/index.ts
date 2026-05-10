@@ -1,6 +1,10 @@
 // mastra/agents/reviewers/index.ts - 审稿团
 import { Agent } from '@mastra/core/agent'
 import { deepseekChat } from '@/lib/models'
+import { getCanonFacts } from '../../tools/get-canon-facts'
+import { getActiveVoiceCard } from '../../tools/get-voice-card'
+import { getGenreProfile } from '../../tools/get-genre-profile'
+import { addIssue } from '../../tools/add-issue'
 
 // 逻辑审查
 export const logicReviewer = new Agent({
