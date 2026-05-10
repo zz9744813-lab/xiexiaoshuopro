@@ -1,0 +1,37 @@
+{
+  "id": "romance",
+  "name": "言情类型配置",
+  "version": 1,
+  "contract": {
+    "must_have": [
+      "情感推进和关系发展",
+      "角色间的化学反应和张力",
+      "情感高潮和转折点",
+      "满足感的结局（HE/HE倾向）"
+    ],
+    "should_have": [
+      "误会与和解",
+      "内心独白展现情感深度",
+      "日常互动中的甜蜜细节"
+    ],
+    "avoid": [
+      "无意义的虐心",
+      "角色性格前后矛盾",
+      "过度依赖巧合推动剧情"
+    ]
+  },
+  "pacing": {
+    "chapters_per_relationship_milestone": "5-10",
+    "tension_curve": "推拉式，甜虐交替",
+    "emotional_scaling": "渐进式升温"
+  },
+  "voice_guidelines": {
+    "narrative_tone": "细腻、感性，注重内心描写",
+    "dialogue_style": "自然、有潜台词、情绪丰富",
+    "description_style": "重氛围营造，善用五感描写"
+  },
+  "world_building": {
+    "required_elements": ["社会背景", "角色日常", "关系网络"],
+    "common_conflicts": ["身份差距", "误会", "第三者", "家庭阻力", "自我成长"]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "id": "literary",
+  "name": "严肃文学类型配置",
+  "version": 1,
+  "contract": {
+    "must_have": [
+      "深刻的人物内心世界",
+      "语言本身的艺术性",
+      "对人性/社会的洞察",
+      "情感的真实性和复杂性"
+    ],
+    "should_have": [
+      "象征和隐喻的运用",
+      "多层次的叙事结构",
+      "留白和暗示"
+    ],
+    "avoid": [
+      "过度戏剧化的情节",
+      "扁平的善恶二元",
+      "说教式的主题表达",
+      "过度解释角色动机"
+    ]
+  },
+  "pacing": {
+    "chapters_per_theme_development": "flexible",
+    "tension_curve": "内在张力为主，外在冲突为辅",
+    "depth_over_speed": "深度优先于速度"
+  },
+  "voice_guidelines": {
+    "narrative_tone": "独特、有辨识度，避免平庸",
+    "dialogue_style": "真实、有层次，反映角色阶层和性格",
+    "description_style": "精准、有诗意，每个词都有分量"
+  },
+  "world_building": {
+    "required_elements": ["社会环境", "时代背景", "人物关系网", "日常细节"],
+    "common_conflicts": ["个体vs社会", "理想vs现实", "记忆vs遗忘", "自由vs责任", "爱vs孤独"]
+  }
+}

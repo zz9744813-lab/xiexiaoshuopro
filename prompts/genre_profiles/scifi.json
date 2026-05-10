@@ -1,0 +1,37 @@
+{
+  "id": "scifi",
+  "name": "科幻类型配置",
+  "version": 1,
+  "contract": {
+    "must_have": [
+      "科学概念或技术设定的内在一致性",
+      "技术/社会变革对人性的影响",
+      "sense of wonder（惊奇感）",
+      "逻辑自洽的世界规则"
+    ],
+    "should_have": [
+      "对现实社会的隐喻或反思",
+      "技术细节的合理推演",
+      "宏大叙事与个人命运的交织"
+    ],
+    "avoid": [
+      "魔法式的科技（无解释的超能力）",
+      "与已建立规则矛盾的设定",
+      "纯粹的技术堆砌无人文关怀"
+    ]
+  },
+  "pacing": {
+    "chapters_per_revelation": "3-8",
+    "tension_curve": "层层揭示，信息逐步释放",
+    "complexity_scaling": "由浅入深，读者与角色同步理解世界"
+  },
+  "voice_guidelines": {
+    "narrative_tone": "冷静、精确，偶尔诗意",
+    "dialogue_style": "专业术语自然融入，不过度解释",
+    "description_style": "重视觉化和空间感，技术描写简洁有力"
+  },
+  "world_building": {
+    "required_elements": ["核心科技设定", "社会结构", "时间线", "技术限制"],
+    "common_conflicts": ["人vs技术", "自由vs控制", "进化vs伦理", "个体vs集体", "已知vs未知"]
+  }
+}

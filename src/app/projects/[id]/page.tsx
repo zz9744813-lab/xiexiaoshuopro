@@ -29,6 +29,8 @@ export default async function ProjectPage({
             { href: `/projects/${id}/volumes`, label: "卷管理" },
             { href: `/projects/${id}/characters`, label: "角色" },
             { href: `/projects/${id}/bible`, label: "世界观" },
+            { href: `/projects/${id}/issues`, label: "Issue" },
+            { href: `/projects/${id}/settings`, label: "设置" },
           ].map((item) => (
             <Link
               key={item.href}

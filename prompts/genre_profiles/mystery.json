@@ -1,0 +1,37 @@
+{
+  "id": "mystery",
+  "name": "悬疑类型配置",
+  "version": 1,
+  "contract": {
+    "must_have": [
+      "核心谜题和解谜过程",
+      "线索的公平分布（读者有机会推理）",
+      "悬念的持续维持",
+      "令人满意的真相揭示"
+    ],
+    "should_have": [
+      "红鲱鱼（误导线索）",
+      "多层嫌疑人",
+      "时间压力或stakes升级"
+    ],
+    "avoid": [
+      "deus ex machina 式的解谜",
+      "关键线索最后才出现",
+      "逻辑漏洞和不合理的推理跳跃"
+    ]
+  },
+  "pacing": {
+    "chapters_per_clue": "1-3",
+    "tension_curve": "持续上升，中间有小释放",
+    "information_control": "严格控制信息释放节奏"
+  },
+  "voice_guidelines": {
+    "narrative_tone": "紧张、克制，细节敏锐",
+    "dialogue_style": "暗藏玄机，每句话可能是线索",
+    "description_style": "注重环境细节，营造不安氛围"
+  },
+  "world_building": {
+    "required_elements": ["案件/谜题", "嫌疑人网络", "线索链", "时间线"],
+    "common_conflicts": ["真相vs谎言", "信任vs怀疑", "正义vs法律", "过去vs现在"]
+  }
+}
