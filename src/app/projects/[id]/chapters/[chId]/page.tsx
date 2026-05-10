@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import Link from "next/link";
+
+const TiptapEditor = lazy(() => import("@/components/editor/TiptapEditor").then(m => ({ default: m.TiptapEditor })));
 
 export default function ChapterEditorPage({
   params,
@@ -194,15 +196,19 @@ export default function ChapterEditorPage({
         <main className="flex-1 p-8 overflow-y-auto">
           <div className="max-w-3xl mx-auto">
             {content ? (
-              <textarea
-                value={content}
-                onChange={(e) => {
-                  setContent(e.target.value);
-                  setSaved(false);
-                }}
-                className="w-full min-h-[70vh] p-0 text-base leading-relaxed bg-transparent border-none outline-none resize-none font-serif"
-                placeholder="章节内容..."
-              />
+              <Suspense fallback={
+                <textarea
+                  value={content}
+                  onChange={(e) => { setContent(e.target.value); setSaved(false); }}
+                  className="w-full min-h-[70vh] p-0 text-base leading-relaxed bg-transparent border-none outline-none resize-none font-serif"
+                />
+              }>
+                <TiptapEditor
+                  content={content}
+                  onChange={(text) => { setContent(text); setSaved(false); }}
+                  placeholder="章节内容..."
+                />
+              </Suspense>
             ) : (
               <div className="text-center py-20 text-gray-400">
                 <p className="mb-2">在左侧写好细纲，然后点击"生成章节"</p>
