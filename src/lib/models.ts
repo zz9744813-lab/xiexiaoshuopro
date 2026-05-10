@@ -27,11 +27,11 @@ const openrouter = createOpenAI({
 
 // 模型实例（provider 只接受 modelId，temperature/maxTokens 在 streamText 时传）
 export function deepseekChat() {
-  return deepseek('deepseek-chat')
+  return deepseek('deepseek-ai/DeepSeek-V3')
 }
 
 export function deepseekReasoner() {
-  return deepseek('deepseek-reasoner')
+  return deepseek('deepseek-ai/DeepSeek-R1')
 }
 
 export function qwenMax() {
