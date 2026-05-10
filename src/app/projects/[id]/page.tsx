@@ -30,6 +30,8 @@ export default async function ProjectPage({
             { href: `/projects/${id}/characters`, label: "角色" },
             { href: `/projects/${id}/bible`, label: "世界观" },
             { href: `/projects/${id}/issues`, label: "Issue" },
+            { href: `/projects/${id}/style`, label: "文风" },
+            { href: `/projects/${id}/observability`, label: "监控" },
             { href: `/projects/${id}/settings`, label: "设置" },
           ].map((item) => (
             <Link
