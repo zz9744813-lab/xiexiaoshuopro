@@ -221,3 +221,25 @@ export const llmCalls = pgTable('llm_calls', {
   finishReason: text('finish_reason'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
+
+// ============ Review / Issue 模块 ============
+
+export const issues = pgTable('issues', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  scope: text('scope').notNull(), // paragraph|scene|chapter|volume|book|character|world
+  scopeId: text('scope_id'),
+  axis: text('axis').notNull(), // logic|voice|canon|pacing|theme|genre|reader|aislop|...
+  severity: issueSeverityEnum('severity').default('warning'),
+  title: text('title').notNull(),
+  description: text('description'),
+  evidence: text('evidence'),
+  proposedFix: text('proposed_fix'),
+  proposedFixDiff: text('proposed_fix_diff'),
+  status: issueStatusEnum('status').default('open'),
+  reviewerAgent: text('reviewer_agent'),
+  relatedIssueIds: jsonb('related_issue_ids'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  resolvedAt: timestamp('resolved_at'),
+  dismissedReason: text('dismissed_reason'),
+})

@@ -34,7 +34,7 @@ export default function NewProjectPage() {
       });
       const data = await res.json();
       if (data.id) {
-        router.push(`/projects/${data.id}`);
+        router.push(`/projects/${data.id}/setup`);
       }
     } catch (err) {
       console.error("创建项目失败:", err);
