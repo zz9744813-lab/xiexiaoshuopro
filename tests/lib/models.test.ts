@@ -6,13 +6,13 @@ describe('LLM Models', () => {
   it('deepseekChat 返回有效模型实例', () => {
     const model = deepseekChat()
     expect(model).toBeDefined()
-    expect(model.modelId).toBe('deepseek-ai/DeepSeek-V3')
+    expect(model.modelId).toBe('minimaxai/minimax-m2.5')
   })
 
   it('deepseekReasoner 返回有效模型实例', () => {
     const model = deepseekReasoner()
     expect(model).toBeDefined()
-    expect(model.modelId).toBe('deepseek-ai/DeepSeek-R1')
+    expect(model.modelId).toBe('minimaxai/minimax-m2.5')
   })
 
   it('getModelForTask 返回正确的配置', () => {

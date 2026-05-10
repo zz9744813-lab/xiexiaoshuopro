@@ -1,18 +1,26 @@
-// tests/api/llm-integration.test.ts - LLM API 集成测试
-// 需要有效的 API key 和余额才能通过
+// tests/api/llm-integration.test.ts - LLM API 集成测试 (NVIDIA API)
 import { describe, it, expect, beforeAll } from 'vitest'
 
-const API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-xbimfoljodzimecrnxcovyglztapkuffddcyjvbujkslghmb'
-const BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.siliconflow.cn/v1'
+const API_KEY = process.env.DEEPSEEK_API_KEY || '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'
+const BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://integrate.api.nvidia.com/v1'
+const MODEL = 'minimaxai/minimax-m2.5'
 
-describe('LLM Integration (SiliconFlow)', () => {
+describe('LLM Integration (NVIDIA API)', () => {
   let isAvailable = false
 
   beforeAll(async () => {
-    // 检查 API 是否可用
     try {
-      const res = await fetch(`${BASE_URL}/models`, {
-        headers: { Authorization: `Bearer ${API_KEY}` },
+      const res = await fetch(`${BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 10,
+        }),
       })
       isAvailable = res.ok
     } catch {
@@ -20,19 +28,11 @@ describe('LLM Integration (SiliconFlow)', () => {
     }
   })
 
-  it('API 连接正常', async () => {
-    const res = await fetch(`${BASE_URL}/models`, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
-    })
-    expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.data).toBeDefined()
-    expect(Array.isArray(data.data)).toBe(true)
-    expect(data.data.length).toBeGreaterThan(0)
-  })
-
   it('Chat Completion 基本调用', async () => {
-    if (!isAvailable) return
+    if (!isAvailable) {
+      console.log('API 不可用，跳过')
+      return
+    }
 
     const res = await fetch(`${BASE_URL}/chat/completions`, {
       method: 'POST',
@@ -41,23 +41,17 @@ describe('LLM Integration (SiliconFlow)', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'deepseek-ai/DeepSeek-V3',
-        messages: [{ role: 'user', content: '回复"测试成功"四个字' }],
-        max_tokens: 20,
+        model: MODEL,
+        messages: [{ role: 'user', content: '回复"测试成功"四个字，不要输出其他内容' }],
+        max_tokens: 100,
         temperature: 0.1,
       }),
     })
 
-    const data = await res.json()
-
-    if (data.code === 30001) {
-      // 余额不足，跳过但不失败
-      console.log('API 余额不足，跳过生成测试')
-      return
-    }
-
     expect(res.status).toBe(200)
+    const data = await res.json()
     expect(data.choices).toBeDefined()
+    expect(data.choices.length).toBeGreaterThan(0)
     expect(data.choices[0].message.content).toContain('测试成功')
   })
 
@@ -71,40 +65,112 @@ describe('LLM Integration (SiliconFlow)', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'deepseek-ai/DeepSeek-V3',
-        messages: [{ role: 'user', content: '数到5' }],
-        max_tokens: 50,
+        model: MODEL,
+        messages: [{ role: 'user', content: '数到3' }],
+        max_tokens: 100,
         stream: true,
       }),
     })
 
-    if (!res.ok) {
-      const err = await res.json()
-      if (err.code === 30001) {
-        console.log('API 余额不足，跳过流式测试')
-        return
-      }
-    }
-
     expect(res.status).toBe(200)
-    expect(res.headers.get('content-type')).toContain('text/event-stream')
+    const contentType = res.headers.get('content-type') || ''
+    expect(contentType).toContain('text/event-stream')
 
     // 读取部分流
     const reader = res.body?.getReader()
     if (reader) {
       const { value } = await reader.read()
       expect(value).toBeDefined()
+      const text = new TextDecoder().decode(value)
+      expect(text).toContain('data:')
       reader.cancel()
     }
   })
 
-  it('模型列表包含 DeepSeek', async () => {
-    const res = await fetch(`${BASE_URL}/models`, {
-      headers: { Authorization: `Bearer ${API_KEY}` },
+  it('小说生成能力测试', async () => {
+    if (!isAvailable) return
+
+    const res = await fetch(`${BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{
+          role: 'system',
+          content: '你是一位小说作者。直接输出小说正文，不要前置说明。'
+        }, {
+          role: 'user',
+          content: '写一段50字左右的仙侠小说开头，主角站在悬崖边。'
+        }],
+        max_tokens: 300,
+        temperature: 0.85,
+      }),
     })
+
+    expect(res.status).toBe(200)
     const data = await res.json()
-    const modelIds = data.data.map((m: { id: string }) => m.id)
-    const hasDeepSeek = modelIds.some((id: string) => id.toLowerCase().includes('deepseek'))
-    expect(hasDeepSeek).toBe(true)
+    expect(data.choices[0].message.content.length).toBeGreaterThan(20)
+    // 不应包含 AI 味的前置说明
+    expect(data.choices[0].message.content).not.toMatch(/^(好的|当然|以下是)/)
+  })
+
+  it('JSON 结构化输出测试', async () => {
+    if (!isAvailable) return
+
+    const res = await fetch(`${BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{
+          role: 'user',
+          content: '输出一个JSON对象，包含name和age字段，name为"李某"，age为25。只输出JSON，不要其他内容。'
+        }],
+        max_tokens: 100,
+        temperature: 0.1,
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    const content = data.choices[0].message.content
+
+    // 提取 JSON（可能包含 think 标签）
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    expect(jsonMatch).not.toBeNull()
+
+    const parsed = JSON.parse(jsonMatch![0])
+    expect(parsed.name).toBe('李某')
+    expect(parsed.age).toBe(25)
+  })
+
+  it('Token 用量统计正确', async () => {
+    if (!isAvailable) return
+
+    const res = await fetch(`${BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{ role: 'user', content: '说你好' }],
+        max_tokens: 50,
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.usage).toBeDefined()
+    expect(data.usage.prompt_tokens).toBeGreaterThan(0)
+    expect(data.usage.completion_tokens).toBeGreaterThan(0)
+    expect(data.usage.total_tokens).toBe(data.usage.prompt_tokens + data.usage.completion_tokens)
   })
 })
