@@ -19,7 +19,7 @@ export const getCharacterProfile = createTool({
       .where(eq(characters.id, characterId))
 
     if (!char) {
-      return { error: `角色 ${characterId} 不存在` }
+      return { error: `Character ${characterId} not found` }
     }
 
     if (viewerCharacterId && viewerCharacterId !== characterId) {

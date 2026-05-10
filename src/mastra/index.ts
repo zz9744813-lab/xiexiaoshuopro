@@ -14,6 +14,7 @@ import {
   logicReviewer, voiceReviewer, canonReviewer, pacingReviewer,
   themeReviewer, genreReviewer, readerSimulator, slopReviewer,
 } from './agents/reviewers'
+import * as tools from './tools'
 
 export const mastra = new Mastra({
   agents: {
@@ -35,5 +36,18 @@ export const mastra = new Mastra({
     genreReviewer,
     readerSimulator,
     slopReviewer,
+  },
+  tools: {
+    searchBible: tools.searchBible,
+    getCharacterProfile: tools.getCharacterProfile,
+    getRecentSummaries: tools.getRecentSummaries,
+    addIssue: tools.addIssue,
+    getWorldClockState: tools.getWorldClockState,
+    getActiveVoiceCard: tools.getActiveVoiceCard,
+    getCanonFacts: tools.getCanonFacts,
+    getGenreProfile: tools.getGenreProfile,
+    getChapterContext: tools.getChapterContext,
+    getCharacterKnowledge: tools.getCharacterKnowledge,
+    getWorldFacts: tools.getWorldFacts,
   },
 })

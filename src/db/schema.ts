@@ -476,3 +476,42 @@ export const exports = pgTable('exports', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
 })
+
+// ============ Type Exports ============
+
+export type Project = typeof projects.$inferSelect
+export type ProjectSettings = typeof projectSettings.$inferSelect
+export type Volume = typeof volumes.$inferSelect
+export type VolumeStatus = typeof volumeStatusEnum.enumValues[number]
+export type ChapterOutline = typeof chapterOutlines.$inferSelect
+export type ChapterOutlineStatus = typeof chapterOutlineStatusEnum.enumValues[number]
+export type SceneMarker = typeof sceneMarkers.$inferSelect
+export type Chapter = typeof chapters.$inferSelect
+export type ChapterVersion = typeof chapterVersions.$inferSelect
+export type ChapterVersionSource = typeof chapterVersionSourceEnum.enumValues[number]
+export type ChapterSummary = typeof chapterSummaries.$inferSelect
+export type Character = typeof characters.$inferSelect
+export type CharacterTier = typeof characterTierEnum.enumValues[number]
+export type CanonFact = typeof canonFacts.$inferSelect
+export type WorldEntry = typeof worldEntries.$inferSelect
+export type Job = typeof jobs.$inferSelect
+export type JobStatus = typeof jobStatusEnum.enumValues[number]
+export type LlmCall = typeof llmCalls.$inferSelect
+export type Issue = typeof issues.$inferSelect
+export type IssueSeverity = typeof issueSeverityEnum.enumValues[number]
+export type IssueStatus = typeof issueStatusEnum.enumValues[number]
+export type Simulation = typeof simulations.$inferSelect
+export type SimulationTurn = typeof simulationTurns.$inferSelect
+export type SimulationScript = typeof simulationScripts.$inferSelect
+export type SimulationCharacterState = typeof simulationCharacterStates.$inferSelect
+export type WorldClock = typeof worldClock.$inferSelect
+export type CharacterRelationship = typeof characterRelationships.$inferSelect
+export type BetweenChapterEvent = typeof betweenChapterEvents.$inferSelect
+export type FactionMovement = typeof factionMovements.$inferSelect
+export type VersionDependency = typeof versionDependencies.$inferSelect
+export type VersionBranch = typeof versionBranches.$inferSelect
+export type VoiceCard = typeof voiceCards.$inferSelect
+export type StyleFingerprint = typeof styleFingerprints.$inferSelect
+export type Prompt = typeof prompts.$inferSelect
+export type PromptRun = typeof promptRuns.$inferSelect
+export type Export = typeof exports.$inferSelect
