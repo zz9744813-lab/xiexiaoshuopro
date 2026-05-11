@@ -1,7 +1,6 @@
-// API: 生成章节摘要
+// API: 生成章节摘要 — 通过 Mastra Agent 调用
 import { NextRequest, NextResponse } from "next/server";
-import { generateText } from "ai";
-import { getModelForTask } from "@/lib/models";
+import { mastra } from "@/mastra";
 import { db } from "@/db";
 import { chapters, chapterVersions, chapterSummaries } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -32,32 +31,19 @@ export async function POST(
       return NextResponse.json({ error: "章节内容为空" }, { status: 404 });
     }
 
-    const { model, temperature, maxTokens } = getModelForTask("summary");
+    const agent = mastra.getAgent('chapterSummarizer');
 
-    const { text } = await generateText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: `请为以下章节内容生成结构化摘要。
-
-## 章节内容
-${version.contentMd.slice(0, 8000)}
-
-## 输出格式（JSON）
-{
-  "shortSummary": "200字以内的简短摘要",
-  "longSummary": "1000字以内的详细摘要",
-  "emotionalArc": "本章情感曲线描述",
-  "keyEvents": [{"event": "事件描述", "importance": 1-10}],
-  "readerQuestionsRaised": ["留给读者的悬念"],
-  "readerQuestionsAnswered": ["本章解答的悬念"]
-}
-
-直接输出 JSON。`,
+    const result = await agent.generate({
+      messages: [{
+        role: 'user',
+        content: `请为以下章节内容生成结构化摘要。\n\n${version.contentMd.slice(0, 8000)}`,
+      }],
+      runtimeContext: { chapterId },
     });
 
     // 解析摘要
     let summaryData;
+    const text = result.text;
     try {
       summaryData = JSON.parse(text.trim());
     } catch {
