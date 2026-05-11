@@ -1,6 +1,6 @@
 // API: 生成章节细纲
 import { NextRequest } from "next/server";
-import { streamText } from "ai";
+import { mastra } from "@/mastra";
 import { getModelForTask } from "@/lib/models";
 import { db } from "@/db";
 import { projects, volumes } from "@/db/schema";
@@ -36,7 +36,7 @@ export async function POST(
       }
     }
 
-    const { model, temperature, maxTokens } = getModelForTask("outline");
+    const agent = mastra.getAgent("chapterOutline");
 
     const systemPrompt = `你是一位小说架构师。根据以下信息，为这一卷拆分章节细纲。
 
@@ -61,14 +61,11 @@ ${JSON.stringify(arcBeats || [], null, 2)}
 输出 JSON 数组，直接输出不要包裹代码块：
 [{"chapterNum":1,"title":"...","beats":"...","targetWordCount":5000,"hookIntent":"...","sceneMarkers":[...]}]`;
 
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: systemPrompt,
+    const result = await agent.stream({
+      messages: [{ role: "user", content: systemPrompt }],
     });
 
-    return result.toTextStreamResponse();
+    return result.toDataStreamResponse();
   } catch (error) {
     console.error("[API] 章节细纲生成失败:", error);
     return new Response(

@@ -2,21 +2,24 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { runSimulationWorkflow } from '@/mastra/workflows/simulation'
 
+import { getModelForTask } from '@/lib/models'
+import { generateText } from 'ai'
+
 describe('Simulation Workflow', () => {
   let apiAvailable = false
 
   beforeAll(async () => {
     try {
-      const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model: 'minimaxai/minimax-m2.5', messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
+      const { model } = getModelForTask('draft')
+      const { text } = await generateText({
+        model,
+        messages: [{ role: 'user', content: 'hi' }],
+        maxTokens: 5,
       })
-      apiAvailable = res.ok
-    } catch { apiAvailable = false }
+      apiAvailable = !!text
+    } catch {
+      apiAvailable = false
+    }
   })
 
   it('多角色推演生成对话', async () => {

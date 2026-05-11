@@ -1,6 +1,6 @@
 // API: 段落重写 (流式)
 import { NextRequest } from "next/server";
-import { streamText } from "ai";
+import { mastra } from "@/mastra";
 import { getModelForTask } from "@/lib/models";
 
 export async function POST(
@@ -44,14 +44,12 @@ ${contextAfter || "（无）"}
 3. 保持与上下文的衔接自然
 4. 直接输出重写后的文本，不要解释`;
 
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: systemPrompt,
+    const agent = mastra.getAgent("sectionRewriter");
+    const result = await agent.stream({
+      messages: [{ role: "user", content: systemPrompt }],
     });
 
-    return result.toTextStreamResponse();
+    return result.toDataStreamResponse();
   } catch (error) {
     console.error("[API] 重写失败:", error);
     return new Response(

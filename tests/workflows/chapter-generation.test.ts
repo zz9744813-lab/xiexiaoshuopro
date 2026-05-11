@@ -2,22 +2,25 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { runChapterGeneration } from '@/mastra/workflows/chapter-generation'
 
+import { getModelForTask } from '@/lib/models'
+import { generateText } from 'ai'
+
 describe('Chapter Generation Workflow', () => {
   let apiAvailable = false
 
   beforeAll(async () => {
     // 检查 API 是否可用
     try {
-      const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model: 'minimaxai/minimax-m2.5', messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
+      const { model } = getModelForTask('draft')
+      const { text } = await generateText({
+        model,
+        messages: [{ role: 'user', content: 'hi' }],
+        maxTokens: 5,
       })
-      apiAvailable = res.ok
-    } catch { apiAvailable = false }
+      apiAvailable = !!text
+    } catch {
+      apiAvailable = false
+    }
   })
 
   it('完整章节生成流水线', async () => {

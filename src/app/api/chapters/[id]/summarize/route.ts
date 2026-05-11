@@ -1,6 +1,6 @@
 // API: 生成章节摘要
 import { NextRequest, NextResponse } from "next/server";
-import { generateText } from "ai";
+import { mastra } from "@/mastra";
 import { getModelForTask } from "@/lib/models";
 import { db } from "@/db";
 import { chapters, chapterVersions, chapterSummaries } from "@/db/schema";
@@ -32,13 +32,12 @@ export async function POST(
       return NextResponse.json({ error: "章节内容为空" }, { status: 404 });
     }
 
-    const { model, temperature, maxTokens } = getModelForTask("summary");
+    const agent = mastra.getAgent("chapterSummary");
 
-    const { text } = await generateText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: `请为以下章节内容生成结构化摘要。
+    const { text } = await agent.generate({
+      messages: [{
+        role: "user",
+        content: `请为以下章节内容生成结构化摘要。
 
 ## 章节内容
 ${version.contentMd.slice(0, 8000)}
@@ -53,7 +52,8 @@ ${version.contentMd.slice(0, 8000)}
   "readerQuestionsAnswered": ["本章解答的悬念"]
 }
 
-直接输出 JSON。`,
+直接输出 JSON。`
+      }],
     });
 
     // 解析摘要

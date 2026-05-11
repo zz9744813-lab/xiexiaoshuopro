@@ -1,5 +1,5 @@
 // mastra/workflows/review.ts - 审查 Workflow
-import { generateText } from 'ai'
+import { mastra } from '@/mastra'
 import { getModelForTask } from '@/lib/models'
 import { detectSlop } from '@/lib/slop-detector'
 
@@ -62,14 +62,11 @@ export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResul
   }
 
   // 2. LLM 审查（逻辑 + 设定）
-  const { model, temperature, maxTokens } = getModelForTask('review')
+  const logicReviewerAgent = mastra.getAgent('logicReviewer')
 
   try {
-    const { text } = await generateText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: `你是一位小说审稿编辑。检查以下章节的逻辑一致性和质量问题。
+    const { text } = await logicReviewerAgent.generate(
+      `你是一位小说审稿编辑。检查以下章节的逻辑一致性和质量问题。
 
 ${input.canonFacts ? `## 已确立的设定\n${input.canonFacts.join('\n')}\n` : ''}
 ${input.volumeThesis ? `## 卷命题\n${input.volumeThesis}\n` : ''}
@@ -86,8 +83,8 @@ ${input.content.slice(0, 6000)}
 输出 JSON 数组，每个 issue：
 [{"title":"问题","severity":"critical|warning|info","axis":"logic|canon|pacing","description":"描述","evidence":"引用","proposedFix":"建议"}]
 
-如果没有问题输出 []。直接输出JSON。`,
-    })
+如果没有问题输出 []。直接输出JSON。`
+    )
 
     reviewersRun.push('logic-canon-pacing-reviewer')
 
