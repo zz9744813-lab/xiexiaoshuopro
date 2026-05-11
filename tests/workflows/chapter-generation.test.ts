@@ -1,28 +1,10 @@
 // tests/workflows/chapter-generation.test.ts - 章节生成 Workflow 端到端测试
-import { describe, it, expect, beforeAll } from 'vitest'
+// 通过 src/lib/models.ts 获取模型，与生产代码同路径
+import { describe, it, expect } from 'vitest'
 import { runChapterGeneration } from '@/mastra/workflows/chapter-generation'
 
 describe('Chapter Generation Workflow', () => {
-  let apiAvailable = false
-
-  beforeAll(async () => {
-    // 检查 API 是否可用
-    try {
-      const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model: 'minimaxai/minimax-m2.5', messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
-      })
-      apiAvailable = res.ok
-    } catch { apiAvailable = false }
-  })
-
   it('完整章节生成流水线', async () => {
-    if (!apiAvailable) { console.log('API 不可用，跳过'); return }
-
     const result = await runChapterGeneration({
       chapterId: 'test-ch-1',
       projectId: 'test-proj-1',
@@ -47,5 +29,5 @@ describe('Chapter Generation Workflow', () => {
     console.log(`生成字数: ${result.wordCount}`)
     console.log(`AI味命中: ${result.slopHits}`)
     console.log(`平均句长: ${result.fingerprint.avgSentenceLength}`)
-  }, 60000) // 60s timeout for LLM call
+  }, 60000)
 })
