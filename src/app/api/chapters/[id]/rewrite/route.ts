@@ -1,7 +1,6 @@
-// API: 段落重写 (流式)
+// API: 段落重写 (流式) — 通过 Mastra Agent 调用
 import { NextRequest } from "next/server";
-import { streamText } from "ai";
-import { getModelForTask } from "@/lib/models";
+import { mastra } from "@/mastra";
 
 export async function POST(
   request: NextRequest,
@@ -20,38 +19,22 @@ export async function POST(
       );
     }
 
-    const { model, temperature, maxTokens } = getModelForTask("rewrite");
+    const agent = mastra.getAgent('sectionRewriter');
 
-    const systemPrompt = `你是一位小说编辑。用户选中了一段文本要求重写。
+    const contextStr = [
+      reason ? `## 重写要求\n${reason}` : "",
+      voiceCard ? `## 声音卡\n${voiceCard}` : "",
+      contextBefore ? `## 上下文（前文）\n${contextBefore}` : "",
+      `## 需要重写的段落\n${selectedText}`,
+      contextAfter ? `## 上下文（后文）\n${contextAfter}` : "",
+    ].filter(Boolean).join("\n\n");
 
-## 重写要求
-${reason || "提升文字质量，保持原意"}
-
-${voiceCard ? `## 声音卡\n${voiceCard}\n` : ""}
-
-## 上下文（前文）
-${contextBefore || "（无）"}
-
-## 需要重写的段落
-${selectedText}
-
-## 上下文（后文）
-${contextAfter || "（无）"}
-
-## 规则
-1. 保持原文的核心信息和情节推进
-2. 提升文字质量，消除 AI 味
-3. 保持与上下文的衔接自然
-4. 直接输出重写后的文本，不要解释`;
-
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: systemPrompt,
+    const result = await agent.stream({
+      messages: [{ role: 'user', content: contextStr }],
+      runtimeContext: { chapterId },
     });
 
-    return result.toTextStreamResponse();
+    return result.toDataStreamResponse();
   } catch (error) {
     console.error("[API] 重写失败:", error);
     return new Response(
