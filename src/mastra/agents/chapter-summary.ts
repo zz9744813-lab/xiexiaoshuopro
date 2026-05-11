@@ -3,7 +3,7 @@ import { Agent } from '@mastra/core/agent'
 import { readPromptSync } from '@/lib/prompts'
 import { deepseekChat } from '@/lib/models'
 
-const instructions = readPromptSync('agents/chapter-summary.md') || '章节摘要 Agent — 请检查 prompts/agents/chapter-summary.md 文件是否存在并加载。'
+const instructions = readPromptSync('agents/chapter-summary.md') || `章节摘要 Agent — 请检查 prompts/agents/chapter-summary.md 文件是否存在并加载。
 
 输出格式（JSON）：
 {

@@ -1,6 +1,6 @@
 // API: 章节生成 (SSE 流式) - 服务端读上下文，通过 agent 生成，流式同时落库
 import { NextRequest } from "next/server";
-import { streamText } from "ai";
+import { mastra } from "@/mastra";
 import { getModelForTask } from "@/lib/models";
 import { loadPrompt } from "@/lib/prompts";
 import { db } from "@/db";
@@ -91,47 +91,28 @@ export async function POST(
 
     // ===== 构建 prompt 并生成 =====
 
-    // 尝试从 prompt 文件加载并渲染
-    const promptVars: Record<string, string> = {
-      project_title: project?.title || "",
-      genre: project?.genre || "",
-      voice_card: voiceCardText,
-      volume_num: String(volume?.volumeNum || 1),
-      volume_title: volume?.title || "",
-      volume_thesis: volume?.thesis || "",
-      prev_chapter_summary: previousSummary,
-      chapter_outline: outline?.beatsMd || outline?.title || "",
-      characters_present: charactersText,
-      target_word_count: String(outline?.targetWordCount || 5000),
-      pov_character: "",
-      hook_intent: outline?.hookIntent || "留下悬念",
-      bible_extract: "",
-      between_chapter_events: worldEventsText,
-      slop_blacklist: "不禁、眼中闪烁着、不由自主、心中一动、嘴角微微上扬",
-      delivers_arc_beats: "",
-      genre_contract: "",
-    };
-
-    let systemPrompt = loadPrompt("agents/chapter-draft.md", promptVars);
-
-    // 如果 prompt 文件不存在或为空，使用内联 fallback
-    if (!systemPrompt.trim()) {
-      systemPrompt = buildFallbackPrompt(promptVars);
-    }
-
-    const { model, temperature, maxTokens } = getModelForTask(
-      "draft",
-      project?.safetyLevel || "normal"
-    );
+    const agent = mastra.getAgent("chapterDraft");
 
     // ===== 流式生成 =====
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      system: systemPrompt,
-      prompt: "请根据以上设定，写出本章正文。",
-      onFinish: async ({ text }) => {
+    const result = await agent.stream({
+      messages: [{ role: "user", content: outline?.beatsMd || outline?.title || "写一章小说正文" }],
+      // @ts-ignore - Mastra run context
+      runtimeContext: {
+        projectId: project?.id,
+        chapterId: chapterId,
+        outline: outline?.beatsMd || outline?.title || "",
+        genre: project?.genre,
+        voiceCard: voiceCardText,
+        volumeNum: volume?.volumeNum,
+        volumeTitle: volume?.title,
+        volumeThesis: volume?.thesis,
+        prevChapterSummary: previousSummary,
+        charactersPresent: charactersText,
+        targetWordCount: outline?.targetWordCount,
+        hookIntent: outline?.hookIntent,
+        worldEvents: worldEventsText,
+      },
+      onFinish: async (text: string) => {
         // 流结束后服务端自动保存到数据库
         if (text && text.length > 50) {
           try {
@@ -155,7 +136,7 @@ export async function POST(
       },
     });
 
-    return result.toTextStreamResponse();
+    return result.toDataStreamResponse();
   } catch (error) {
     console.error("[API] 章节生成失败:", error);
     return new Response(
@@ -163,22 +144,4 @@ export async function POST(
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
-}
-
-function buildFallbackPrompt(vars: Record<string, string>): string {
-  const parts: string[] = [];
-  parts.push(`你是「${vars.project_title || "小说"}」的执笔者。类型：${vars.genre || "通用"}。`);
-  parts.push("");
-  if (vars.voice_card) parts.push(`## 声音卡\n${vars.voice_card}\n`);
-  if (vars.prev_chapter_summary) parts.push(`## 上一章摘要\n${vars.prev_chapter_summary}\n`);
-  if (vars.chapter_outline) parts.push(`## 本章细纲\n${vars.chapter_outline}\n`);
-  if (vars.characters_present) parts.push(`## 涉及人物\n${vars.characters_present}\n`);
-  if (vars.between_chapter_events) parts.push(`## 章间事件\n${vars.between_chapter_events}\n`);
-  parts.push("## 写作要求");
-  parts.push("1. 直接输出 markdown 正文，不要前置说明");
-  parts.push("2. 避免 AI 味表达");
-  parts.push("3. 章末留有钩子");
-  parts.push(`4. 目标字数 ${vars.target_word_count}`);
-  if (vars.slop_blacklist) parts.push(`5. 避开：${vars.slop_blacklist}`);
-  return parts.join("\n");
 }

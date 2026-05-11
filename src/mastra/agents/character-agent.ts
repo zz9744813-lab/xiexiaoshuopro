@@ -2,6 +2,14 @@
 import { Agent } from '@mastra/core/agent'
 import { deepseekChat } from '@/lib/models'
 
+// 供非模板化场景使用
+export const characterAgent = new Agent({
+  id: 'character-agent',
+  name: 'character-agent',
+  instructions: '你正在扮演角色参与一场推演。',
+  model: deepseekChat(),
+})
+
 /**
  * 创建一个角色 Agent 实例
  * 每个参与推演的角色都会实例化一份

@@ -1,5 +1,5 @@
 // mastra/workflows/simulation.ts - 推演 Workflow（修复知识隔离）
-import { generateText } from 'ai'
+import { mastra } from '@/mastra'
 import { getModelForTask } from '@/lib/models'
 
 export interface SimulationInput {
@@ -51,11 +51,11 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
       .join('\n')
 
     // Director 决策
-    const { text: directorResponse } = await generateText({
-      model,
-      temperature: 0.7,
-      maxOutputTokens: 500,
-      prompt: `你是推演导演。场景目标：${input.directorGoal}
+    const directorAgent = mastra.getAgent('director')
+    const { text: directorResponse } = await directorAgent.generate({
+      messages: [{
+        role: "user",
+        content: `你是推演导演。场景目标：${input.directorGoal}
 
 参与角色：
 ${characterDescriptions}
@@ -66,7 +66,8 @@ ${publicHistory || '（刚开始）'}
 决定下一步。输出JSON：
 {"action":"speak|end","targetName":"角色名","reason":"理由"}
 
-如果场景目标已达成或对话自然结束，action 为 "end"。`,
+如果场景目标已达成或对话自然结束，action 为 "end"。`
+      }],
     })
 
     let directorDecision
@@ -90,11 +91,11 @@ ${publicHistory || '（刚开始）'}
       .join('\n')
 
     // 角色发言（只注入自己的私密信息 + 可见的历史）
-    const { text: characterResponse } = await generateText({
-      model,
-      temperature: 0.9,
-      maxOutputTokens: maxTokens,
-      prompt: `你是「${speakingChar.name}」，${speakingChar.publicRole}。
+    const characterAgent = mastra.getAgent('characterAgent')
+    const { text: characterResponse } = await characterAgent.generate({
+      messages: [{
+        role: "user",
+        content: `你是「${speakingChar.name}」，${speakingChar.publicRole}。
 秘密动机：${speakingChar.secretMotive}
 声音：${speakingChar.voiceMd || '自然'}
 你知道的事：${speakingChar.knowledgeFacts.join('；') || '无特殊'}
@@ -103,7 +104,8 @@ ${publicHistory || '（刚开始）'}
 ${characterVisibleHistory || '（刚开始）'}
 
 以你的身份回应。输出JSON：
-{"utterance":"你说的话或动作","reasoning":"内心想法（其他角色看不到）"}`,
+{"utterance":"你说的话或动作","reasoning":"内心想法（其他角色看不到）"}`
+      }],
     })
 
     let charOutput

@@ -1,6 +1,6 @@
 // API: 创建卷 + 生成卷大纲
 import { NextRequest, NextResponse } from "next/server";
-import { streamText } from "ai";
+import { mastra } from "@/mastra";
 import { getModelForTask } from "@/lib/models";
 import { db } from "@/db";
 import { projects, volumes } from "@/db/schema";
@@ -60,7 +60,7 @@ export async function POST(
       .returning();
 
     // 生成卷大纲（流式）
-    const { model, temperature, maxTokens } = getModelForTask("outline");
+    const agent = mastra.getAgent("volumeOutline");
 
     const systemPrompt = `你是一位小说架构师。根据以下信息，为这一卷设计三幕弧和 arc beats。
 
@@ -84,15 +84,12 @@ ${thesis}
 
 直接输出 JSON，不要包裹在代码块中。`;
 
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: systemPrompt,
+    const result = await agent.stream({
+      messages: [{ role: "user", content: systemPrompt }],
     });
 
     // 返回卷信息 + 流式大纲
-    return result.toTextStreamResponse({
+    return result.toDataStreamResponse({
       headers: {
         "X-Volume-Id": volume.id,
       },

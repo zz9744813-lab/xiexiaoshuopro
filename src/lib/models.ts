@@ -4,12 +4,12 @@ import { createOpenAI } from '@ai-sdk/openai'
 // ─── 主力 Provider（DeepSeek via 环境变量） ───
 const primaryProvider = createOpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY || '',
-  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.huanyan.fun/v1',
+  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
 })
 
-// 模型 ID 从环境变量读取，默认 deepseek-v4-pro
-const PRIMARY_MODEL = process.env.LLM_MODEL_ID || 'deepseek-v4-pro'
-const REASONER_MODEL = process.env.LLM_REASONER_MODEL_ID || 'deepseek-v4-pro'
+// 模型 ID 从环境变量读取
+const PRIMARY_MODEL = process.env.LLM_MODEL_ID || 'deepseek-chat'
+const REASONER_MODEL = process.env.LLM_REASONER_MODEL_ID || 'deepseek-reasoner'
 
 // ─── Qwen（备用） ───
 const qwen = createOpenAI({
@@ -96,14 +96,14 @@ export function getModelForTask(task: ModelTask, safetyLevel: string = 'normal')
     }
   }
 
-  const isReasoner = PRIMARY_MODEL.includes('v4-pro') || PRIMARY_MODEL.includes('reasoner')
+  const isReasoner = PRIMARY_MODEL.includes('reasoner')
   const reasonBudget = isReasoner ? 8000 : 0
 
   const configs: Record<string, ModelConfig> = {
     draft:     { model: deepseekChat(), temperature: 0.85, maxTokens: 12000 + reasonBudget, topP: 0.9 },
     outline:   { model: deepseekChat(), temperature: 0.7,  maxTokens: 4000  + reasonBudget },
-    review:    { model: deepseekChat(), temperature: 0.3,  maxTokens: 4000,  topP: 0.85 },
-    summary:   { model: deepseekChat(), temperature: 0.5,  maxTokens: 3000 },
+    review:    { model: deepseekChat(), temperature: 0.3,  maxTokens: 3000,  topP: 0.85 },
+    summary:   { model: deepseekChat(), temperature: 0.5,  maxTokens: 2000 },
     simulation:{ model: deepseekChat(), temperature: 0.9,  maxTokens: 4000  + reasonBudget },
     rewrite:   { model: deepseekChat(), temperature: 0.75, maxTokens: 6000  + reasonBudget },
     extract:   { model: deepseekChat(), temperature: 0.3,  maxTokens: 3000  + reasonBudget },

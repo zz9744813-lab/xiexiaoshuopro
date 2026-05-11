@@ -10,6 +10,8 @@ import { hookAgent } from './agents/hook'
 import { sectionRewriterAgent } from './agents/section-rewriter'
 import { directorAgent } from './agents/director'
 import { narratorAgent } from './agents/narrator'
+import { worldTickAgent } from './agents/world-tick'
+import { characterAgent } from './agents/character-agent'
 import {
   logicReviewer, voiceReviewer, canonReviewer, pacingReviewer,
   themeReviewer, genreReviewer, readerSimulator, slopReviewer,
@@ -28,6 +30,8 @@ export const mastra = new Mastra({
     sectionRewriter: sectionRewriterAgent,
     director: directorAgent,
     narrator: narratorAgent,
+    worldTick: worldTickAgent,
+    characterAgent: characterAgent,
     logicReviewer,
     voiceReviewer,
     canonReviewer,

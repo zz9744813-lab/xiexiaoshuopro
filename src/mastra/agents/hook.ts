@@ -3,7 +3,7 @@ import { Agent } from '@mastra/core/agent'
 import { readPromptSync } from '@/lib/prompts'
 import { deepseekChat } from '@/lib/models'
 
-const instructions = readPromptSync('agents/hook.md') || '钩子 Agent — 请检查 prompts/agents/hook.md 文件是否存在并加载。'
+const instructions = readPromptSync('agents/hook.md') || `钩子 Agent — 请检查 prompts/agents/hook.md 文件是否存在并加载。
 
 钩子类型：
 1. 悬念型：揭示新信息但留下更大疑问

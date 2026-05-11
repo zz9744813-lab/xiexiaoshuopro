@@ -1,6 +1,6 @@
 // API: 世界时钟 + between-chapter events
 import { NextRequest, NextResponse } from "next/server";
-import { generateText } from "ai";
+import { mastra } from "@/mastra";
 import { getModelForTask } from "@/lib/models";
 import { db } from "@/db";
 import { worldClock, betweenChapterEvents, projects } from "@/db/schema";
@@ -51,13 +51,12 @@ export async function POST(
       return NextResponse.json({ error: "项目不存在" }, { status: 404 });
     }
 
-    const { model, temperature, maxTokens } = getModelForTask("extract");
+    const agent = mastra.getAgent("worldTick");
 
-    const { text } = await generateText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: `你是一位世界观管理员。在两章之间，世界在继续运转。
+    const { text } = await agent.generate({
+      messages: [{
+        role: "user",
+        content: `你是一位世界观管理员。在两章之间，世界在继续运转。
 
 ## 当前世界时间
 ${currentWorldDate || "未设定"}
@@ -77,7 +76,8 @@ ${project.genre}
 }]
 
 如果当前没有需要发生的事件，输出空数组 []。
-直接输出 JSON。`,
+直接输出 JSON。`
+      }],
     });
 
     // 解析并保存事件

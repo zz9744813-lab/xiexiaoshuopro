@@ -3,7 +3,7 @@
 // 主要的章节生成逻辑在 api/chapters/[id]/generate/route.ts 中
 // 这里提供独立的非流式版本（用于批量生成、测试等场景）
 
-import { generateText } from 'ai'
+import { mastra } from '@/mastra'
 import { getModelForTask } from '@/lib/models'
 import { loadPrompt } from '@/lib/prompts'
 import { detectSlop } from '@/lib/slop-detector'
@@ -69,11 +69,12 @@ export async function runChapterGeneration(
   }
 
   // 生成
-  const { model, temperature, maxTokens } = getModelForTask('draft', input.safetyLevel)
-  const { text: content } = await generateText({
-    model, temperature, maxOutputTokens: maxTokens,
-    system: systemPrompt,
-    prompt: '请根据以上设定，写出本章正文。',
+  const draftAgent = mastra.getAgent('chapterDraft')
+  const { text: content } = await draftAgent.generate({
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: '请根据以上设定，写出本章正文。' }
+    ],
   })
 
   // 后处理
@@ -83,12 +84,14 @@ export async function runChapterGeneration(
   // 摘要（可选）
   let summary
   try {
-    const { model: sModel, temperature: sTemp, maxTokens: sMax } = getModelForTask('summary')
-    const { text: sText } = await generateText({
-      model: sModel, temperature: sTemp, maxOutputTokens: sMax,
-      prompt: `为以下章节生成摘要。输出JSON：{"shortSummary":"200字摘要","longSummary":"详细摘要","keyEvents":[{"event":"事件","importance":1}]}
+    const summaryAgent = mastra.getAgent('chapterSummary')
+    const { text: sText } = await summaryAgent.generate({
+      messages: [{
+        role: 'user',
+        content: `为以下章节生成摘要。输出JSON：{"shortSummary":"200字摘要","longSummary":"详细摘要","keyEvents":[{"event":"事件","importance":1}]}
 章节内容：${content.slice(0, 6000)}
-直接输出JSON。`,
+直接输出JSON。`
+      }],
     })
     const match = sText.match(/\{[\s\S]*\}/)
     if (match) summary = JSON.parse(match[0])

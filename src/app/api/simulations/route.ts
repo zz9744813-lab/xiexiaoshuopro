@@ -1,6 +1,6 @@
 // API: 推演管理
 import { NextRequest, NextResponse } from "next/server";
-import { streamText } from "ai";
+import { mastra } from "@/mastra";
 import { getModelForTask } from "@/lib/models";
 import { db } from "@/db";
 import { simulations, simulationTurns, characters } from "@/db/schema";
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       .map((c) => `- ${c.name}（${c.publicRole || "未知身份"}）：${c.secretMotive || "无特殊动机"}`)
       .join("\n");
 
-    const { model, temperature, maxTokens } = getModelForTask("simulation");
+    const agent = mastra.getAgent("director");
 
     const systemPrompt = `你是一位小说推演导演。你需要模拟以下角色之间的互动场景。
 
@@ -80,15 +80,12 @@ ${povChoice || "第三人称全知"}
 
 开始推演：`;
 
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens * 5, // 推演需要更多 token
-      prompt: systemPrompt,
+    const result = await agent.stream({
+      messages: [{ role: "user", content: systemPrompt }],
     });
 
     // 返回推演 ID + 流式内容
-    return result.toTextStreamResponse({
+    return result.toDataStreamResponse({
       headers: {
         "X-Simulation-Id": simulation.id,
       },
