@@ -4,12 +4,12 @@ import { createOpenAI } from '@ai-sdk/openai'
 // ─── 主力 Provider（DeepSeek via 环境变量） ───
 const primaryProvider = createOpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY || '',
-  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.huanyan.fun/v1',
+  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
 })
 
 // 模型 ID 从环境变量读取，默认 deepseek-v4-pro
-const PRIMARY_MODEL = process.env.LLM_MODEL_ID || 'deepseek-v4-pro'
-const REASONER_MODEL = process.env.LLM_REASONER_MODEL_ID || 'deepseek-v4-pro'
+const PRIMARY_MODEL = process.env.LLM_MODEL_ID || 'deepseek-chat'
+const REASONER_MODEL = process.env.LLM_REASONER_MODEL_ID || 'deepseek-reasoner'
 
 // ─── Qwen（备用） ───
 const qwen = createOpenAI({
