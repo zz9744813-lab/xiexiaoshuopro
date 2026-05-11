@@ -1,26 +1,10 @@
 // tests/workflows/simulation.test.ts - 推演 Workflow 端到端测试
-import { describe, it, expect, beforeAll } from 'vitest'
+// 通过 src/lib/models.ts 获取模型，与生产代码同路径
+import { describe, it, expect } from 'vitest'
 import { runSimulationWorkflow } from '@/mastra/workflows/simulation'
 
 describe('Simulation Workflow', () => {
-  let apiAvailable = false
-
-  beforeAll(async () => {
-    try {
-      const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model: 'minimaxai/minimax-m2.5', messages: [{ role: 'user', content: 'hi' }], max_tokens: 5 }),
-      })
-      apiAvailable = res.ok
-    } catch { apiAvailable = false }
-  })
-
   it('多角色推演生成对话', async () => {
-    if (!apiAvailable) { console.log('API 不可用，跳过'); return }
     const result = await runSimulationWorkflow({
       projectId: 'test-proj-1',
       directorGoal: '李某和王某在酒楼相遇，互相试探对方的底细。最终李某发现王某在说谎。',
@@ -63,5 +47,5 @@ describe('Simulation Workflow', () => {
     console.log(`推演轮数: ${result.turnCount}`)
     console.log(`参与角色: ${[...speakers].join(', ')}`)
     console.log(`剧本长度: ${result.scriptMd.length} 字`)
-  }, 120000) // 推演需要多次 LLM 调用，给 2 分钟
+  }, 120000) // 推演需要多次 LLM 调用
 })
