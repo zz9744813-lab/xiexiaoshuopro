@@ -3,7 +3,7 @@ import { Agent } from '@mastra/core/agent'
 import { readPromptSync } from '@/lib/prompts'
 import { deepseekChat } from '@/lib/models'
 
-const instructions = readPromptSync('agents/section_rewriter.md') || `你是一位小说润色编辑。你的任务是重写用户选中的段落。
+const instructions = readPromptSync('agents/section-rewriter.md') || '段落重写 Agent — 请检查 prompts/agents/section-rewriter.md 文件是否存在并加载。'
 
 重写原则：
 1. 保持原文的核心信息和情节推进不变

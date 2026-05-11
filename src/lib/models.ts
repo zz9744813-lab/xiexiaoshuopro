@@ -1,40 +1,48 @@
 // lib/models.ts - LLM Provider 抽象层
 import { createOpenAI } from '@ai-sdk/openai'
 
-// 主力 Provider（通过环境变量配置 baseURL 和 key）
+// ─── 主力 Provider（DeepSeek via 环境变量） ───
 const primaryProvider = createOpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY || '',
-  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
+  baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.huanyan.fun/v1',
 })
 
-// 模型 ID 也从环境变量读取，默认 deepseek-chat
-const PRIMARY_MODEL = process.env.LLM_MODEL_ID || 'deepseek-chat'
+// 模型 ID 从环境变量读取，默认 deepseek-v4-pro
+const PRIMARY_MODEL = process.env.LLM_MODEL_ID || 'deepseek-v4-pro'
+const REASONER_MODEL = process.env.LLM_REASONER_MODEL_ID || 'deepseek-v4-pro'
 
-// Qwen (备用)
+// ─── Qwen（备用） ───
 const qwen = createOpenAI({
   apiKey: process.env.QWEN_API_KEY || '',
   baseURL: process.env.QWEN_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
 })
 
-// 自部署 (兜底)
+// ─── 自部署 Qwen（兜底 / unrestricted） ───
 const selfHostedQwen = createOpenAI({
   apiKey: 'not-needed',
   baseURL: process.env.SELF_HOSTED_QWEN_URL || 'http://localhost:8000/v1',
 })
 
-// OpenRouter (应急)
+// ─── OpenRouter（应急） ───
 const openrouter = createOpenAI({
   apiKey: process.env.OPENROUTER_API_KEY || '',
   baseURL: 'https://openrouter.ai/api/v1',
 })
 
-// 模型工厂
+// ─── NVIDIA NIM（可选高性能 provider） ───
+const nvidiaNim = createOpenAI({
+  apiKey: process.env.NVIDIA_NIM_API_KEY || 'not-needed',
+  baseURL: process.env.NVIDIA_NIM_BASE_URL || 'http://localhost:8000/v1',
+})
+
+// ─── 模型工厂函数 ───
+
 export function deepseekChat() {
   return primaryProvider(PRIMARY_MODEL)
 }
 
 export function deepseekReasoner() {
-  return primaryProvider(process.env.LLM_REASONER_MODEL_ID || PRIMARY_MODEL)
+  return primaryProvider(REASONER_MODEL)
 }
 
 export function qwenMax() {
@@ -49,17 +57,37 @@ export function openrouterModel(model: string) {
   return openrouter(model)
 }
 
-// 路由策略
-export type ModelTask = 'draft' | 'outline' | 'review' | 'summary' | 'simulation' | 'rewrite' | 'extract'
+export function nvidiaModel(model?: string) {
+  const m = model || process.env.NVIDIA_NIM_MODEL || 'meta/llama-3.1-8b-instruct'
+  return nvidiaNim(m)
+}
+
+// ─── 路由策略 ───
+
+export type ModelTask =
+  | 'draft'
+  | 'outline'
+  | 'review'
+  | 'summary'
+  | 'simulation'
+  | 'rewrite'
+  | 'extract'
+  | 'analysis'
 
 export interface ModelConfig {
   model: ReturnType<typeof deepseekChat>
   temperature: number
   maxTokens: number
+  topP?: number
+  frequencyPenalty?: number
+  presencePenalty?: number
 }
 
 export function getModelForTask(task: ModelTask, safetyLevel: string = 'normal'): ModelConfig {
   if (safetyLevel === 'unrestricted') {
+    if (process.env.NVIDIA_NIM_BASE_URL && process.env.NVIDIA_NIM_MODEL) {
+      return { model: nvidiaModel(), temperature: task === 'draft' ? 0.85 : 0.7, maxTokens: 8000 }
+    }
     if (process.env.SELF_HOSTED_QWEN_URL) {
       return { model: qwenSelfHosted(), temperature: task === 'draft' ? 0.85 : 0.7, maxTokens: 8000 }
     }
@@ -68,22 +96,19 @@ export function getModelForTask(task: ModelTask, safetyLevel: string = 'normal')
     }
   }
 
-  switch (task) {
-    case 'draft':
-      return { model: deepseekChat(), temperature: 0.85, maxTokens: 12000 }
-    case 'outline':
-      return { model: deepseekChat(), temperature: 0.7, maxTokens: 4000 }
-    case 'review':
-      return { model: deepseekChat(), temperature: 0.3, maxTokens: 3000 }
-    case 'summary':
-      return { model: deepseekChat(), temperature: 0.5, maxTokens: 2000 }
-    case 'simulation':
-      return { model: deepseekChat(), temperature: 0.9, maxTokens: 2000 }
-    case 'rewrite':
-      return { model: deepseekChat(), temperature: 0.75, maxTokens: 6000 }
-    case 'extract':
-      return { model: deepseekChat(), temperature: 0.3, maxTokens: 3000 }
-    default:
-      return { model: deepseekChat(), temperature: 0.7, maxTokens: 4000 }
+  const isReasoner = PRIMARY_MODEL.includes('v4-pro') || PRIMARY_MODEL.includes('reasoner')
+  const reasonBudget = isReasoner ? 8000 : 0
+
+  const configs: Record<string, ModelConfig> = {
+    draft:     { model: deepseekChat(), temperature: 0.85, maxTokens: 12000 + reasonBudget, topP: 0.9 },
+    outline:   { model: deepseekChat(), temperature: 0.7,  maxTokens: 4000  + reasonBudget },
+    review:    { model: deepseekChat(), temperature: 0.3,  maxTokens: 4000,  topP: 0.85 },
+    summary:   { model: deepseekChat(), temperature: 0.5,  maxTokens: 3000 },
+    simulation:{ model: deepseekChat(), temperature: 0.9,  maxTokens: 4000  + reasonBudget },
+    rewrite:   { model: deepseekChat(), temperature: 0.75, maxTokens: 6000  + reasonBudget },
+    extract:   { model: deepseekChat(), temperature: 0.3,  maxTokens: 3000  + reasonBudget },
+    analysis:  { model: deepseekChat(), temperature: 0.5,  maxTokens: 4000 },
   }
+
+  return configs[task] || { model: deepseekChat(), temperature: 0.7, maxTokens: 4000 }
 }

@@ -3,7 +3,7 @@ import { Agent } from '@mastra/core/agent'
 import { readPromptSync } from '@/lib/prompts'
 import { deepseekChat } from '@/lib/models'
 
-const instructions = readPromptSync('agents/bible_extract.md') || `你是一位小说世界观管理员。你的任务是从已完成的章节中提取硬性事实和世界观条目。
+const instructions = readPromptSync('agents/bible-extract.md') || 'Bible 抽取 Agent — 请检查 prompts/agents/bible-extract.md 文件是否存在并加载。'
 
 提取规则：
 1. 硬性事实（canon_facts）：不可违反的确定信息

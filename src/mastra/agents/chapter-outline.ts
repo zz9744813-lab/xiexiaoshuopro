@@ -3,7 +3,7 @@ import { Agent } from '@mastra/core/agent'
 import { readPromptSync } from '@/lib/prompts'
 import { deepseekChat } from '@/lib/models'
 
-const instructions = readPromptSync('agents/chapter_outline.md') || `你是一位小说架构师。你的任务是从卷弧拆分章节细纲。
+const instructions = readPromptSync('agents/chapter-outline.md') || `你是一位小说架构师。你的任务是从卷弧拆分章节细纲。
 
 每章细纲包含：
 - 章节号和标题
