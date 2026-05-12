@@ -1,7 +1,7 @@
 // src/db/queries/chapter.ts — Chapter query helpers
 import { eq, desc, asc, and } from 'drizzle-orm'
 import { db } from '@/db'
-import { chapters, chapterVersions, chapterSummaries } from '@/db/schema'
+import { chapters, chapterVersions, chapterOutlines } from '@/db/schema'
 
 /** Get chapter with its active version */
 export async function getChapterWithActiveVersion(chapterId: string) {
@@ -22,22 +22,20 @@ export async function getChapterWithActiveVersion(chapterId: string) {
 }
 
 /** Get chapter context: outline + summaries of previous chapters */
-export async function getChapterContext(projectId: string, volumeId: string, chapterNumber: number) {
-  // Previous chapters in same volume
+export async function getChapterContext(projectId: string, volumeId: string, chapterNum: number) {
+  // Previous chapters in same volume via outlines
   const prevChapters = await db
     .select()
     .from(chapters)
-    .where(and(eq(chapters.volumeId, volumeId), eq(chapters.chapterNumber, chapterNumber - 1)))
+    .innerJoin(chapterOutlines, eq(chapters.chapterOutlineId, chapterOutlines.id))
+    .where(
+      and(
+        eq(chapterOutlines.volumeId, volumeId),
+        eq(chapterOutlines.chapterNum, chapterNum - 1)
+      )
+    )
 
-  // Summaries of recent chapters
-  const recentSummaries = await db
-    .select()
-    .from(chapterSummaries)
-    .where(eq(chapterSummaries.projectId, projectId))
-    .orderBy(desc(chapterSummaries.createdAt))
-    .limit(5)
-
-  return { prevChapters, recentSummaries }
+  return { prevChapters }
 }
 
 /** Append a new chapter version */
