@@ -11,16 +11,16 @@ export const recordFact = createTool({
     projectId: z.string(),
     fact: z.string(),
     category: z.string().optional(),
-    source: z.string(),
-    confidence: z.number().min(0).max(1).default(1),
+    sourceChapterId: z.string().optional(),
+    immutable: z.boolean().default(false),
   }),
-  execute: async ({ projectId, fact, category, source, confidence }) => {
+  execute: async ({ projectId, fact, category, sourceChapterId, immutable }) => {
     const [entry] = await db.insert(canonFacts).values({
       projectId,
       fact,
       category: category || 'general',
-      source,
-      confidence,
+      sourceChapterId,
+      immutable,
     }).returning()
     return { id: entry.id, fact: entry.fact }
   },
