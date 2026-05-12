@@ -1,6 +1,9 @@
 // mastra/workflows/simulation.ts - 推演 Workflow（修复知识隔离）
 import { mastra } from '@/mastra'
 import { createCharacterAgent } from '@/mastra/agents/character-agent'
+import { getCrewModel } from '@/lib/models'
+
+const { model: simulatorModel } = getCrewModel('simulator')
 
 export interface SimulationInput {
   projectId: string
@@ -37,7 +40,7 @@ export interface SimulationResult {
  * 推演 Workflow - 多轮 turn-by-turn 循环（带知识隔离）
  * Director → Mastra director agent
  * Narrator → Mastra narrator agent
- * Character → Mastra character agent
+ * Character → Mastra character agent（动态实例化，知识隔离）
  */
 export async function runSimulationWorkflow(input: SimulationInput): Promise<SimulationResult> {
   const turns: SimulationTurn[] = []
@@ -88,19 +91,22 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
       .map(t => `[${t.speakerName}]: ${t.utterance}`)
       .join('\n')
 
-    // 角色发言 — 直接创建角色 Agent 实例（知识隔离）
-    const characterAgent = createCharacterAgent({
-      id: speakingChar.id,
-      name: speakingChar.name,
-      publicRole: speakingChar.publicRole,
-      secretMotive: speakingChar.secretMotive,
-      trueIntent: speakingChar.secretMotive, // 复用 secretMotive
-      voiceMd: speakingChar.voiceMd || '自然',
-      currentEmotionalState: '',
-      knowledgeFacts: speakingChar.knowledgeFacts || [],
-      knowledgeSuspected: [],
-      knowledgeLies: [],
-    })
+    // 角色发言 — 动态创建角色 Agent 实例（知识隔离，simulator model 注入）
+    const characterAgent = createCharacterAgent(
+      simulatorModel,
+      {
+        id: speakingChar.id,
+        name: speakingChar.name,
+        publicRole: speakingChar.publicRole,
+        secretMotive: speakingChar.secretMotive,
+        trueIntent: speakingChar.secretMotive, // 复用 secretMotive
+        voiceMd: speakingChar.voiceMd || '自然',
+        currentEmotionalState: '',
+        knowledgeFacts: speakingChar.knowledgeFacts || [],
+        knowledgeSuspected: [],
+        knowledgeLies: [],
+      }
+    )
     let charOutput: { utterance: string; reasoning: string }
     try {
       const { text: characterResponse } = await characterAgent.generate({
