@@ -31,7 +31,7 @@ export async function POST(
       return NextResponse.json({ error: "章节内容为空" }, { status: 404 });
     }
 
-    const agent = mastra.getAgent('chapterSummarizer');
+    const agent = mastra.getAgent('chapterSummary');
 
     const result = await agent.generate({
       messages: [{
