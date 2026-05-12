@@ -1,6 +1,5 @@
 // mastra/workflows/review.ts - 审查 Workflow
-import { generateText } from 'ai'
-import { getModelForTask } from '@/lib/models'
+import { mastra } from '@/mastra'
 import { detectSlop } from '@/lib/slop-detector'
 
 export interface ReviewInput {
@@ -31,7 +30,7 @@ export interface ReviewResult {
 }
 
 /**
- * 审查 Workflow - 并发跑多个 reviewer
+ * 审查 Workflow — 通过 Mastra agent 并发跑多个 reviewer
  */
 export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResult> {
   const issues: ReviewIssue[] = []
@@ -61,48 +60,55 @@ export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResul
     }
   }
 
-  // 2. LLM 审查（逻辑 + 设定）
-  const { model, temperature, maxTokens } = getModelForTask('review')
+  // 2. 并发跑 LLM 审查（每个 reviewer 独立 agent）
+  const reviewerConfigs = [
+    { name: 'logicReviewer', label: 'logic-reviewer', axis: 'logic' },
+    { name: 'canonReviewer', label: 'canon-reviewer', axis: 'canon' },
+    { name: 'pacingReviewer', label: 'pacing-reviewer', axis: 'pacing' },
+  ]
 
-  try {
-    const { text } = await generateText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: `你是一位小说审稿编辑。检查以下章节的逻辑一致性和质量问题。
+  const contextLine = [
+    input.canonFacts ? `canon_facts: ${input.canonFacts.join('|')}` : '',
+    input.volumeThesis ? `volume_thesis: ${input.volumeThesis}` : '',
+    input.genre ? `genre: ${input.genre}` : '',
+  ].filter(Boolean).join('\n')
 
-${input.canonFacts ? `## 已确立的设定\n${input.canonFacts.join('\n')}\n` : ''}
-${input.volumeThesis ? `## 卷命题\n${input.volumeThesis}\n` : ''}
+  const llmResults = await Promise.allSettled(
+    reviewerConfigs.map(async ({ name, label, axis }) => {
+      try {
+        const agent = mastra.getAgent(name)
+        const { text } = await agent.generate({
+          messages: [{
+            role: 'user',
+            content: `${contextLine}\n\nchapter_content:\n${input.content.slice(0, 6000)}`,
+          }],
+          runtimeContext: {
+            projectId: input.projectId,
+            chapterId: input.chapterId,
+          },
+        })
 
-## 章节内容
-${input.content.slice(0, 6000)}
+        const jsonMatch = text.match(/\[[\s\S]*\]/)
+        const parsed: ReviewIssue[] = jsonMatch ? JSON.parse(jsonMatch[0]) : []
 
-## 检查项
-1. 逻辑因果是否成立
-2. 是否与已确立设定矛盾
-3. 节奏是否合理
-4. 章末钩子是否有效
-
-输出 JSON 数组，每个 issue：
-[{"title":"问题","severity":"critical|warning|info","axis":"logic|canon|pacing","description":"描述","evidence":"引用","proposedFix":"建议"}]
-
-如果没有问题输出 []。直接输出JSON。`,
+        return { label, axis, issues: parsed }
+      } catch {
+        return { label, axis, issues: [] }
+      }
     })
+  )
 
-    reviewersRun.push('logic-canon-pacing-reviewer')
-
-    const jsonMatch = text.match(/\[[\s\S]*\]/)
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0])
-      for (const issue of parsed) {
+  for (const result of llmResults) {
+    if (result.status === 'fulfilled') {
+      reviewersRun.push(result.value.label)
+      for (const issue of result.value.issues) {
         issues.push({
           ...issue,
-          reviewerAgent: 'logic-canon-pacing-reviewer',
+          axis: issue.axis || result.value.axis,
+          reviewerAgent: result.value.label,
         })
       }
     }
-  } catch {
-    // LLM 审查失败不阻塞
   }
 
   return {
