@@ -64,7 +64,7 @@ export async function runChapterGeneration(
   // 摘要（通过 Mastra agent）
   let summary
   try {
-    const summaryAgent = mastra.getAgent('chapterSummarizer')
+    const summaryAgent = mastra.getAgent('chapterSummary')
     const sResult = await summaryAgent.generate({
       messages: [{ role: 'user', content: `请为以下章节生成结构化摘要。\n\n${content.slice(0, 6000)}` }],
     })
