@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     });
 
     // 返回推演 ID + 流式内容
-    return result.toDataStreamResponse({
+    return result.toTextStreamResponse({
       headers: {
         "X-Simulation-Id": simulation.id,
       },
