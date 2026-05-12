@@ -1,6 +1,7 @@
 // mastra/workflows/review.ts - 审查 Workflow
 import { mastra } from '@/mastra'
 import { detectSlop } from '@/lib/slop-detector'
+import { z } from 'zod'
 
 export interface ReviewInput {
   content: string
@@ -29,8 +30,31 @@ export interface ReviewResult {
   reviewersRun: string[]
 }
 
+const IssueSchema = z.array(z.object({
+  axis: z.string().optional(),
+  severity: z.enum(['critical', 'warning', 'info']),
+  title: z.string(),
+  description: z.string().optional().default(''),
+  evidence: z.string().optional().default(''),
+  proposedFix: z.string().optional().default(''),
+}))
+
+const reviewerConfigs = [
+  { name: 'logicReviewer',        label: 'logic-reviewer',        axis: 'logic' },
+  { name: 'voiceReviewer',        label: 'voice-reviewer',        axis: 'voice' },
+  { name: 'canonReviewer',        label: 'canon-reviewer',        axis: 'canon' },
+  { name: 'pacingReviewer',       label: 'pacing-reviewer',       axis: 'pacing' },
+  { name: 'themeReviewer',        label: 'theme-reviewer',        axis: 'theme' },
+  { name: 'genreReviewer',        label: 'genre-reviewer',        axis: 'genre' },
+  { name: 'readerSimulator',      label: 'reader-simulator',      axis: 'reader' },
+  { name: 'slopReviewer',         label: 'slop-reviewer',         axis: 'aislop' },
+  { name: 'volumeReviewer',       label: 'volume-reviewer',       axis: 'volume' },
+  { name: 'continuityReviewer',   label: 'continuity-reviewer',   axis: 'continuity' },
+  { name: 'relationshipReviewer', label: 'relationship-reviewer', axis: 'relationship' },
+]
+
 /**
- * 审查 Workflow — 通过 Mastra agent 并发跑多个 reviewer
+ * 审查 Workflow — 所有 11 个 reviewer 并发
  */
 export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResult> {
   const issues: ReviewIssue[] = []
@@ -60,13 +84,7 @@ export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResul
     }
   }
 
-  // 2. 并发跑 LLM 审查（每个 reviewer 独立 agent）
-  const reviewerConfigs = [
-    { name: 'logicReviewer', label: 'logic-reviewer', axis: 'logic' },
-    { name: 'canonReviewer', label: 'canon-reviewer', axis: 'canon' },
-    { name: 'pacingReviewer', label: 'pacing-reviewer', axis: 'pacing' },
-  ]
-
+  // 2. 并发跑全部 11 个 LLM reviewer
   const contextLine = [
     input.canonFacts ? `canon_facts: ${input.canonFacts.join('|')}` : '',
     input.volumeThesis ? `volume_thesis: ${input.volumeThesis}` : '',
@@ -88,10 +106,12 @@ export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResul
           },
         })
 
-        const jsonMatch = text.match(/\[[\s\S]*\]/)
-        const parsed: ReviewIssue[] = jsonMatch ? JSON.parse(jsonMatch[0]) : []
+        const m = text.match(/\[[\s\S]*\]/)
+        const raw = m ? JSON.parse(m[0]) : []
+        const parsed = IssueSchema.safeParse(raw)
+        const parsedIssues = parsed.success ? parsed.data : []
 
-        return { label, axis, issues: parsed }
+        return { label, axis, issues: parsedIssues }
       } catch {
         return { label, axis, issues: [] }
       }
@@ -103,8 +123,12 @@ export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResul
       reviewersRun.push(result.value.label)
       for (const issue of result.value.issues) {
         issues.push({
-          ...issue,
+          title: issue.title,
+          severity: issue.severity,
           axis: issue.axis || result.value.axis,
+          description: issue.description,
+          evidence: issue.evidence,
+          proposedFix: issue.proposedFix,
           reviewerAgent: result.value.label,
         })
       }
