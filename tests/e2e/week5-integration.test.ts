@@ -23,10 +23,9 @@ describe('Week5 集成测试', () => {
   // ========================================
   describe('Prompt 加载 & 渲染', () => {
     const requiredPrompts = [
-      'agents/orchestrator.md',
       'agents/character-agent.md',
       'agents/director.md',
-      'agents/narrator.md',
+      'agents/scenify.md',
       'agents/reader-simulator.md',
     ]
 
@@ -60,21 +59,6 @@ describe('Week5 集成测试', () => {
       expect(rendered).toContain('冷静简洁')
       expect(rendered).toContain('知道A')
       expect(rendered).not.toContain('{{ name }}')  // no unreplaced vars
-    })
-
-    it('orchestrator.md 变量渲染', () => {
-      const raw = readPromptSync('agents/orchestrator.md')
-      const { body } = parseFrontmatter(raw!)
-      const rendered = renderPrompt(body, {
-        novel_title: '仙道长青',
-        chapter_number: '3',
-        word_count: '3000',
-        genre_hint: '仙侠',
-        plot_direction: '主角突破瓶颈',
-      })
-
-      expect(rendered).toContain('仙道长青')
-      expect(rendered).toContain('3000')
     })
 
     it('director.md 包含 visibleTo 规范', () => {
