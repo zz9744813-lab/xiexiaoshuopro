@@ -48,3 +48,4 @@ export const factionMovements = pgTable('faction_movements', {
 
 export type WorldClock = typeof worldClock.$inferSelect
 export type BetweenChapterEvent = typeof betweenChapterEvents.$inferSelect
+export type FactionMovement = typeof factionMovements.$inferSelect
