@@ -27,3 +27,23 @@ export function getPoolStatus() {
 
 export const db = drizzle(pool, { schema })
 export { schema, pool }
+
+// Pool shutdown hooks
+if (process.env.NODE_ENV !== 'production') {
+  process.on('SIGTERM', async () => {
+    await pool.end()
+    process.exit(0)
+  })
+}
+
+process.on('beforeExit', async () => {
+  await pool.end().catch(() => {})
+})
+
+export function getPoolStatus() {
+  return {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+  }
+}
