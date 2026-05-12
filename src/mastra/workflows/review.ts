@@ -2,6 +2,9 @@
 import { mastra } from '@/mastra'
 import { detectSlop } from '@/lib/slop-detector'
 import { z } from 'zod'
+import { db } from '@/db'
+import { issues as issuesTable } from '@/db/schema'
+import { and, eq } from 'drizzle-orm'
 
 export interface ReviewInput {
   content: string
@@ -25,6 +28,7 @@ export interface ReviewIssue {
 
 export interface ReviewResult {
   issues: ReviewIssue[]
+  fixedContent: string | null
   slopHits: number
   slopRate: string
   reviewersRun: string[]
@@ -53,14 +57,20 @@ const reviewerConfigs = [
   { name: 'relationshipReviewer', label: 'relationship-reviewer', axis: 'relationship' },
 ]
 
+const FIXER_MAP: Record<string, string> = {
+  canon: 'canonFixer',
+  aislop: 'slopFixer',
+  continuity: 'continuityFixer',
+}
+
 /**
- * 审查 Workflow — 所有 11 个 reviewer 并发
+ * 审查 Workflow — 所有 11 个 reviewer + auto-fix loop + issue 落库
  */
 export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResult> {
   const issues: ReviewIssue[] = []
   const reviewersRun: string[] = []
 
-  // 1. Slop 检测（本地，不需要 LLM）
+  // 1. Slop 检测（本地）
   const slopHits = detectSlop(input.content)
   reviewersRun.push('slop-detector')
 
@@ -100,43 +110,120 @@ export async function runReviewWorkflow(input: ReviewInput): Promise<ReviewResul
             role: 'user',
             content: `${contextLine}\n\nchapter_content:\n${input.content.slice(0, 6000)}`,
           }],
-          runtimeContext: {
-            projectId: input.projectId,
-            chapterId: input.chapterId,
-          },
+          runtimeContext: { projectId: input.projectId, chapterId: input.chapterId },
         })
 
         const m = text.match(/\[[\s\S]*\]/)
         const raw = m ? JSON.parse(m[0]) : []
         const parsed = IssueSchema.safeParse(raw)
-        const parsedIssues = parsed.success ? parsed.data : []
-
-        return { label, axis, issues: parsedIssues }
+        return { label, axis, issues: parsed.success ? parsed.data : [] }
       } catch {
         return { label, axis, issues: [] }
       }
     })
   )
 
+  // 3. 收集 issues + 自动修复
+  let updatedContent = input.content
+  const finalIssues: ReviewIssue[] = []
+
+  // 先加 slop 结果
+  for (const i of issues) {
+    finalIssues.push(i)
+  }
+
   for (const result of llmResults) {
-    if (result.status === 'fulfilled') {
-      reviewersRun.push(result.value.label)
-      for (const issue of result.value.issues) {
-        issues.push({
-          title: issue.title,
-          severity: issue.severity,
-          axis: issue.axis || result.value.axis,
-          description: issue.description,
-          evidence: issue.evidence,
-          proposedFix: issue.proposedFix,
-          reviewerAgent: result.value.label,
-        })
+    if (result.status !== 'fulfilled') continue
+    reviewersRun.push(result.value.label)
+
+    for (const issue of result.value.issues) {
+      const ri: ReviewIssue = {
+        title: issue.title,
+        severity: issue.severity,
+        axis: issue.axis || result.value.axis,
+        description: issue.description,
+        evidence: issue.evidence,
+        proposedFix: issue.proposedFix,
+        reviewerAgent: result.value.label,
+      }
+
+      // Auto-fix critical issues
+      if (issue.severity === 'critical' && FIXER_MAP[ri.axis]) {
+        let fixed = false
+        const fixerAgent = mastra.getAgent(FIXER_MAP[ri.axis])
+
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            const { text: fixText } = await fixerAgent.generate({
+              messages: [{
+                role: 'user',
+                content: [
+                  `## 待修复 issue`,
+                  `axis: ${ri.axis}`,
+                  `description: ${ri.description}`,
+                  `evidence: ${ri.evidence}`,
+                  `proposed_fix: ${ri.proposedFix}`,
+                  ``,
+                  `## 当前章节内容`,
+                  updatedContent,
+                  ``,
+                  `请直接输出修复后的完整章节 markdown，不要解释。`,
+                ].join('\n'),
+              }],
+              runtimeContext: { projectId: input.projectId, chapterId: input.chapterId },
+            })
+
+            const lenRatio = fixText.length / updatedContent.length
+            if (lenRatio > 0.7 && lenRatio < 1.3) {
+              updatedContent = fixText
+              finalIssues.push({ ...ri, severity: 'info' })
+              fixed = true
+              break
+            }
+          } catch { /* 重试 */ }
+        }
+
+        if (!fixed) {
+          finalIssues.push({ ...ri, severity: 'warning' })
+        }
+      } else {
+        finalIssues.push(ri)
       }
     }
   }
 
+  // 4. Issue 落库
+  for (const i of finalIssues) {
+    try {
+      const existing = await db.select({ id: issuesTable.id })
+        .from(issuesTable)
+        .where(and(
+          eq(issuesTable.projectId, input.projectId),
+          eq(issuesTable.scopeId, input.chapterId),
+          eq(issuesTable.axis, i.axis),
+          eq(issuesTable.title, i.title),
+        ))
+      if (existing.length > 0) continue
+
+      await db.insert(issuesTable).values({
+        projectId: input.projectId,
+        scope: 'chapter',
+        scopeId: input.chapterId,
+        axis: i.axis,
+        severity: i.severity,
+        title: i.title,
+        description: i.description,
+        evidence: i.evidence,
+        proposedFix: i.proposedFix,
+        reviewerAgent: i.reviewerAgent,
+        status: 'open',
+      })
+    } catch { /* 落库失败不阻塞 */ }
+  }
+
   return {
-    issues,
+    issues: finalIssues,
+    fixedContent: updatedContent !== input.content ? updatedContent : null,
     slopHits: slopHits.length,
     slopRate: input.content.length > 0
       ? (slopHits.length / input.content.length * 100).toFixed(3) + '%'
