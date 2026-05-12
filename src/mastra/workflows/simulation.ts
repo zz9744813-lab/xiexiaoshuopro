@@ -1,5 +1,6 @@
 // mastra/workflows/simulation.ts - 推演 Workflow（修复知识隔离）
 import { mastra } from '@/mastra'
+import { createCharacterAgent } from '@/mastra/agents/character-agent'
 
 export interface SimulationInput {
   projectId: string
@@ -87,8 +88,19 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
       .map(t => `[${t.speakerName}]: ${t.utterance}`)
       .join('\n')
 
-    // 角色发言 — 使用 Mastra character agent
-    const characterAgent = mastra.getAgent('character')
+    // 角色发言 — 直接创建角色 Agent 实例（知识隔离）
+    const characterAgent = createCharacterAgent({
+      id: speakingChar.id,
+      name: speakingChar.name,
+      publicRole: speakingChar.publicRole,
+      secretMotive: speakingChar.secretMotive,
+      trueIntent: speakingChar.secretMotive, // 复用 secretMotive
+      voiceMd: speakingChar.voiceMd || '自然',
+      currentEmotionalState: '',
+      knowledgeFacts: speakingChar.knowledgeFacts || [],
+      knowledgeSuspected: [],
+      knowledgeLies: [],
+    })
     let charOutput: { utterance: string; reasoning: string }
     try {
       const { text: characterResponse } = await characterAgent.generate({
