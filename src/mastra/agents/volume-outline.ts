@@ -3,7 +3,7 @@ import { Agent } from '@mastra/core/agent'
 import { readPromptSync } from '@/lib/prompts'
 import { deepseekChat } from '@/lib/models'
 
-const instructions = readPromptSync('agents/volume_outline.md') || `你是一位小说架构师。你的任务是从卷命题展开三幕弧和 arc beats。
+const instructions = readPromptSync('agents/volume-outline.md') || `你是一位小说架构师。你的任务是从卷命题展开三幕弧和 arc beats。
 
 要求：
 1. 设计清晰的三幕结构（起、承转、合）
