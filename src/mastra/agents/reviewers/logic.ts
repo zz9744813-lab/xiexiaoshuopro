@@ -6,7 +6,7 @@ export function logicReviewer(model: LanguageModelV1) {
   return new Agent({
     id: 'logic-reviewer',
     name: 'logic-reviewer',
-    instructions: readPromptSync('agents/logic-reviewer.md')
+    instructions: readPromptSync('agents/reviewer/logic.md')
       || '检查章节中的因果逻辑、时间线一致性和情节合理性。输出 JSON 数组。',
     model,
   })
