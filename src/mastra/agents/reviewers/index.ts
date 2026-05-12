@@ -1,6 +1,6 @@
-// mastra/agents/reviewers/index.ts - 审稿团
-// 每个 reviewer 从独立文件导入，便于单独维护和扩展
+// mastra/agents/reviewers/index.ts — 审稿团统一导出
 
+// Re-export all reviewer factories
 export { logicReviewer } from './logic'
 export { voiceReviewer } from './voice'
 export { canonReviewer } from './canon'
@@ -13,7 +13,7 @@ export { volumeReviewer } from './volume'
 export { continuityReviewer } from './continuity'
 export { relationshipReviewer } from './relationship'
 
-// 向后兼容：保留 reviewer 名称到函数的映射
+import type { LanguageModelV1 } from '@ai-sdk/provider'
 import { logicReviewer } from './logic'
 import { voiceReviewer } from './voice'
 import { canonReviewer } from './canon'
@@ -25,9 +25,9 @@ import { slopReviewer } from './slop'
 import { volumeReviewer } from './volume'
 import { continuityReviewer } from './continuity'
 import { relationshipReviewer } from './relationship'
-import type { LanguageModelV1 } from '@ai-sdk/provider'
 
-export const reviewerFactories: Record<string, (model: LanguageModelV1) => any> = {
+/** 向后兼容：reviewer 名称到工厂函数的映射 */
+export const reviewerFactories: Record<string, (model: LanguageModelV1) => ReturnType<typeof logicReviewer>> = {
   logic: logicReviewer,
   voice: voiceReviewer,
   canon: canonReviewer,
