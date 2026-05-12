@@ -48,6 +48,7 @@ export const chapterSummaries = pgTable('chapter_summaries', {
   keyEvents: jsonb('key_events'),
   readerQuestionsRaised: jsonb('reader_questions_raised'),
   readerQuestionsAnswered: jsonb('reader_questions_answered'),
+  embedding: vector('embedding'),
 })
 
 
@@ -60,6 +61,7 @@ export const chapterChunks = pgTable('chapter_chunks', {
   chunkIdx: integer('chunk_idx').notNull(),
   povCharacterId: uuid('pov_character_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  embedding: vector('embedding'),
 })
 
 
