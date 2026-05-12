@@ -5,27 +5,15 @@ import { db } from "@/db";
 import { projects, volumes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-// GET: 获取项目的所有卷
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
-
-  try {
-    const allVolumes = await db
-      .select()
-      .from(volumes)
-      .where(eq(volumes.projectId, projectId));
-
-    return NextResponse.json(allVolumes);
-  } catch (error) {
-    console.error("[API] 获取卷列表失败:", error);
-    return NextResponse.json({ error: "获取卷列表失败" }, { status: 500 });
-  }
+  const allVolumes = await db.select().from(volumes).where(eq(volumes.projectId, projectId));
+  return NextResponse.json({ volumes: allVolumes });
 }
 
-// POST: 创建新卷并生成大纲
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -34,54 +22,42 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { thesis, title, volumeNum } = body;
+    const { title, thesis, arcBeats, chapterCount } = body;
 
-    // 获取项目信息
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId));
-
+    const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
     if (!project) {
-      return new Response(JSON.stringify({ error: "项目不存在" }), { status: 404 });
+      return NextResponse.json({ error: "项目不存在" }, { status: 404 });
     }
 
-    // 创建卷
-    const [volume] = await db
+    const [created] = await db
       .insert(volumes)
-      .values({
-        projectId,
-        volumeNum: volumeNum || 1,
-        title: title || `第${volumeNum || 1}卷`,
-        thesis,
-        status: "planning",
-      })
+      .values({ projectId, title, thesis: thesis || "", chapterCount: chapterCount || 10 })
       .returning();
 
-    // 通过 Mastra volumeOutline agent 生成卷大纲
-    const agent = mastra.getAgent("volumeOutline");
+    if (arcBeats) {
+      const agent = mastra.getAgent("volumeOutline");
+      const context = [
+        `genre: ${project.genre}`,
+        `volume_title: ${title}`,
+        `volume_thesis: ${thesis || ""}`,
+        `arc_beats: ${JSON.stringify(arcBeats, null, 2)}`,
+        `chapter_count: ${chapterCount || 10}`,
+      ].join("\n");
 
-    const context = [
-      `genre: ${project.genre}`,
-      `thesis: ${thesis}`,
-    ].join("\n");
+      try {
+        const { text } = await agent.generate({
+          messages: [{ role: "user", content: context }],
+          runtimeContext: { projectId, volumeId: created.id },
+        });
+        return NextResponse.json({ volume: created, outline: text });
+      } catch {
+        return NextResponse.json({ volume: created });
+      }
+    }
 
-    const result = await agent.stream({
-      messages: [{ role: "user", content: context }],
-      runtimeContext: { projectId, volumeId: volume.id },
-    });
-
-    // 返回卷信息 + 流式大纲
-    return result.toDataStreamResponse({
-      headers: {
-        "X-Volume-Id": volume.id,
-      },
-    });
+    return NextResponse.json({ volume: created });
   } catch (error) {
-    console.error("[API] 创建卷失败:", error);
-    return new Response(
-      JSON.stringify({ error: "创建卷失败" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    console.error("[API] 卷创建失败:", error);
+    return NextResponse.json({ error: "卷创建失败" }, { status: 500 });
   }
 }
