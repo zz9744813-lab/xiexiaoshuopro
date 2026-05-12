@@ -49,7 +49,7 @@ export async function POST(
       runtimeContext: { projectId, volumeId },
     });
 
-    return result.toDataStreamResponse();
+    return result.toTextStreamResponse();
   } catch (error) {
     console.error("[API] 章节细纲生成失败:", error);
     return new Response(
