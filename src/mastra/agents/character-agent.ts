@@ -1,10 +1,12 @@
-// mastra/agents/character-agent.ts - 角色扮演 Agent（prompt 文件模式）
+// mastra/agents/character-agent.ts - 角色扮演 Agent（模板化，prompt 文件模式）
 import { Agent } from '@mastra/core/agent'
 import type { LanguageModelV1 } from '@ai-sdk/provider'
-import { readPromptSync } from '@/lib/prompts'
+import { readPromptSync, parseFrontmatter, renderPrompt } from '@/lib/prompts'
 
-const defaultInstructions = readPromptSync('agents/character-agent.md')
-  || '你正在扮演角色参与推演。根据你的身份、知识和声音进行角色决策。输出 JSON。'
+const promptRaw = readPromptSync('agents/character-agent.md')
+const { body: promptTemplate } = promptRaw
+  ? parseFrontmatter(promptRaw)
+  : { body: '你正在扮演角色参与推演。输出 JSON。' }
 
 /**
  * 创建一个角色 Agent 实例
@@ -25,8 +27,17 @@ export function createCharacterAgent(
     knowledgeLies: string[]
   }
 ) {
-  // 用 Mastra 的内置模板变量注入角色上下文
-  const instructions = defaultInstructions
+  const instructions = renderPrompt(promptTemplate, {
+    name: character.name,
+    public_role: character.publicRole,
+    secret_motive: character.secretMotive,
+    true_intent: character.trueIntent,
+    voice_md: character.voiceMd || '自然说话',
+    current_emotional_state: character.currentEmotionalState || '平静',
+    knowledge_facts: (character.knowledgeFacts || []).join('\n') || '无特殊知识',
+    knowledge_suspected: (character.knowledgeSuspected || []).join('\n') || '无',
+    knowledge_lies: (character.knowledgeLies || []).join('\n') || '无',
+  })
 
   return new Agent({
     id: `character-${character.id}`,
