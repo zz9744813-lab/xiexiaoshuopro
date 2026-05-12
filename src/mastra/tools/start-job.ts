@@ -10,13 +10,13 @@ export const startJob = createTool({
   inputSchema: z.object({
     projectId: z.string(),
     type: z.string(),
-    context: z.record(z.unknown()).optional(),
+    input: z.record(z.unknown()).optional(),
   }),
-  execute: async ({ projectId, type, context }) => {
+  execute: async ({ projectId, type, input }) => {
     const [job] = await db.insert(jobs).values({
       projectId,
       type,
-      context: context || {},
+      input: input ?? {},
       status: 'running',
       startedAt: new Date(),
     }).returning()
