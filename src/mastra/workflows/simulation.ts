@@ -59,7 +59,7 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
 
     // Director 决策 — 使用 Mastra agent
     const directorAgent = mastra.getAgent('director')
-    let directorDecision: { action: string; reason: string; targetName?: string }
+    let directorDecision: { action: string; reason: string; targetName?: string; targetCharacterId?: string; visibleTo?: string[]; injectionText?: string; endReason?: string }
     try {
       const { text: directorResponse } = await directorAgent.generate({
         messages: [{
@@ -82,7 +82,8 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
     if (directorDecision.action === 'end') break
 
     // 找到目标角色
-    const speakingChar = input.characters.find(c => c.name === directorDecision.targetName)
+    const targetId = directorDecision.targetCharacterId || directorDecision.targetName
+    const speakingChar = input.characters.find(c => c.id === targetId || c.name === targetId)
       || input.characters[turnIdx % input.characters.length]
 
     // ===== 知识隔离：角色只能看到 visibleTo 包含自己的 turns =====
@@ -164,7 +165,8 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
       speakerName: speakingChar.name,
       utterance: charOutput.utterance,
       reasoning: charOutput.reasoning,
-      visibleTo: input.characters.map(c => c.id),
+      // 知识隔离：visibleTo 由 Director 决策控制，fallback 仅发言人自己可见
+      visibleTo: directorDecision.visibleTo || [speakingChar.id],
     })
   }
 
