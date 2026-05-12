@@ -1,7 +1,6 @@
 // API: 生成章节细纲
 import { NextRequest } from "next/server";
-import { streamText } from "ai";
-import { getModelForTask } from "@/lib/models";
+import { mastra } from "@/mastra";
 import { db } from "@/db";
 import { projects, volumes } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -36,39 +35,21 @@ export async function POST(
       }
     }
 
-    const { model, temperature, maxTokens } = getModelForTask("outline");
+    const agent = mastra.getAgent("chapterOutline");
 
-    const systemPrompt = `你是一位小说架构师。根据以下信息，为这一卷拆分章节细纲。
+    const context = [
+      `genre: ${project.genre}`,
+      `volume_thesis: ${volumeThesis}`,
+      `arc_beats: ${JSON.stringify(arcBeats || [], null, 2)}`,
+      `chapter_count: ${chapterCount || 10}`,
+    ].join("\n");
 
-## 小说类型
-${project.genre}
-
-## 卷命题
-${volumeThesis}
-
-## Arc Beats
-${JSON.stringify(arcBeats || [], null, 2)}
-
-## 要求
-生成 ${chapterCount || 10} 章的细纲，每章包含：
-- chapterNum: 章节号
-- title: 章节标题
-- beats: 本章要推进的情节点（markdown）
-- targetWordCount: 目标字数
-- hookIntent: 章末钩子意图
-- sceneMarkers: [{type: "dialogue"|"action"|"description", goal: "场景目标", estimatedWords: 数字}]
-
-输出 JSON 数组，直接输出不要包裹代码块：
-[{"chapterNum":1,"title":"...","beats":"...","targetWordCount":5000,"hookIntent":"...","sceneMarkers":[...]}]`;
-
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: systemPrompt,
+    const result = await agent.stream({
+      messages: [{ role: "user", content: context }],
+      runtimeContext: { projectId, volumeId },
     });
 
-    return result.toTextStreamResponse();
+    return result.toDataStreamResponse();
   } catch (error) {
     console.error("[API] 章节细纲生成失败:", error);
     return new Response(
