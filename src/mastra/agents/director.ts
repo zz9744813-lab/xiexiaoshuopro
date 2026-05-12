@@ -1,11 +1,8 @@
 // mastra/agents/director.ts - 推演导演 Agent
 import { Agent } from '@mastra/core/agent'
-import { deepseekChat } from '@/lib/models'
+import type { LanguageModelV1 } from '@ai-sdk/provider'
 
-export const directorAgent = new Agent({
-  id: 'director',
-  name: 'director',
-  instructions: `你是一位推演场景的导演。你管理多角色互动场景，决定：
+const instructions = `你是一位推演场景的导演。你管理多角色互动场景，决定：
 1. 让谁说话/行动（基于场景动态）
 2. 是否注入外部事件
 3. 何时结束场景
@@ -24,6 +21,13 @@ export const directorAgent = new Agent({
   "injectionText": "注入事件描述（inject时）",
   "endReason": "结束原因（end时）",
   "reasoning": "你的决策理由"
-}`,
-  model: deepseekChat(),
-})
+}`
+
+export function directorAgent(model: LanguageModelV1) {
+  return new Agent({
+    id: 'director',
+    name: 'director',
+    instructions,
+    model,
+  })
+}
