@@ -35,7 +35,7 @@ export async function POST(
       runtimeContext: { projectId, chapterId },
     });
 
-    return result.toDataStreamResponse();
+    return result.toTextStreamResponse();
   } catch (error) {
     console.error("[API] 章节生成失败:", error);
     return new Response(
