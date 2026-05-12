@@ -16,10 +16,14 @@ import {
   themeReviewer, genreReviewer, readerSimulator, slopReviewer,
   volumeReviewer, continuityReviewer, relationshipReviewer,
 } from './agents/reviewers'
+import { canonFixer } from './agents/fixer/canon'
+import { continuityFixer } from './agents/fixer/continuity'
+import { slopFixer } from './agents/fixer/slop'
 import * as tools from './tools'
 
 // 为不同任务选择合适的模型
 const draftModel = deepseekChat()
+const fixerModel = deepseekChat()
 const reviewModel = deepseekChat()
 const reasonerModel = deepseekReasoner()
 
@@ -46,6 +50,9 @@ export const mastra = new Mastra({
     volumeReviewer: volumeReviewer(reviewModel),
     continuityReviewer: continuityReviewer(reviewModel),
     relationshipReviewer: relationshipReviewer(reviewModel),
+    canonFixer: canonFixer(fixerModel),
+    continuityFixer: continuityFixer(fixerModel),
+    slopFixer: slopFixer(fixerModel),
   },
   tools: {
     searchBible: tools.searchBible,
