@@ -135,6 +135,19 @@ export const chapterSummaries = pgTable('chapter_summaries', {
   readerQuestionsAnswered: jsonb('reader_questions_answered'),
 })
 
+
+// ============ Generation — RAG 分块 ============
+
+export const chapterChunks = pgTable('chapter_chunks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'cascade' }).notNull(),
+  chunkText: text('chunk_text').notNull(),
+  chunkIdx: integer('chunk_idx').notNull(),
+  povCharacterId: uuid('pov_character_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
 // ============ Character 模块 ============
 
 export const characters = pgTable('characters', {
@@ -186,6 +199,40 @@ export const worldEntries = pgTable('world_entries', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
+
+// ============ World / Bible — 势力与时间线 ============
+
+export const factions = pgTable('factions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  ideology: text('ideology'),
+  powerLevel: integer('power_level'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const factionRelations = pgTable('faction_relations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  factionA: uuid('faction_a').references(() => factions.id, { onDelete: 'cascade' }).notNull(),
+  factionB: uuid('faction_b').references(() => factions.id, { onDelete: 'cascade' }).notNull(),
+  relation: text('relation').notNull(), // ally|enemy|neutral|tense|trade
+  notes: text('notes'),
+  changedInChapterId: uuid('changed_in_chapter_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const timelineEvents = pgTable('timeline_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  worldYear: text('world_year'),
+  storyChapterId: uuid('story_chapter_id'),
+  eventText: text('event_text').notNull(),
+  participants: jsonb('participants'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
 // ============ Observability 模块 ============
 
 export const jobs = pgTable('jobs', {
@@ -222,6 +269,34 @@ export const llmCalls = pgTable('llm_calls', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
+
+// ============ Observability — 决策与工具调用 ============
+
+export const agentDecisions = pgTable('agent_decisions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobId: uuid('job_id').references(() => jobs.id),
+  agentName: text('agent_name').notNull(),
+  decisionType: text('decision_type').notNull(),
+  contextSummary: text('context_summary'),
+  chosenOption: text('chosen_option'),
+  alternativesConsidered: jsonb('alternatives_considered'),
+  rationale: text('rationale'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const toolCalls = pgTable('tool_calls', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobId: uuid('job_id').references(() => jobs.id),
+  agentName: text('agent_name'),
+  toolName: text('tool_name').notNull(),
+  input: jsonb('input'),
+  output: jsonb('output'),
+  durationMs: integer('duration_ms'),
+  errorText: text('error_text'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
 // ============ Review / Issue 模块 ============
 
 export const issues = pgTable('issues', {
@@ -243,6 +318,37 @@ export const issues = pgTable('issues', {
   resolvedAt: timestamp('resolved_at'),
   dismissedReason: text('dismissed_reason'),
 })
+
+
+// ============ Review — 审计记录与修复尝试 ============
+
+export const reviewRuns = pgTable('review_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  scope: text('scope').notNull(),
+  scopeId: text('scope_id'),
+  reviewersInvoked: jsonb('reviewers_invoked'),
+  totalIssuesFound: integer('total_issues_found').default(0),
+  totalCritical: integer('total_critical').default(0),
+  durationMs: integer('duration_ms'),
+  costUsd: numeric('cost_usd'),
+  triggeredBy: text('triggered_by').default('auto'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const fixAttempts = pgTable('fix_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  issueId: uuid('issue_id').references(() => issues.id, { onDelete: 'cascade' }).notNull(),
+  attemptIdx: integer('attempt_idx').notNull(),
+  fixAgent: text('fix_agent'),
+  beforeText: text('before_text'),
+  afterText: text('after_text'),
+  diffMd: text('diff_md'),
+  outcome: text('outcome'),
+  costUsd: numeric('cost_usd'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
 
 // ============ Simulation 模块 ============
 
@@ -308,6 +414,18 @@ export const simulationCharacterStates = pgTable('simulation_character_states', 
   postRelationships: jsonb('post_relationships'),
 })
 
+
+// ============ Simulation — 角色剧本切片 ============
+
+export const scriptCharacterChunks = pgTable('script_character_chunks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  simulationScriptId: uuid('simulation_script_id').references(() => simulationScripts.id, { onDelete: 'cascade' }).notNull(),
+  characterId: uuid('character_id').references(() => characters.id).notNull(),
+  chunkText: text('chunk_text').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
 // ============ Memory 模块 ============
 
 export const characterEpisodicMemory = pgTable('character_episodic_memory', {
@@ -344,6 +462,29 @@ export const characterRelationships = pgTable('character_relationships', {
   historyMd: text('history_md'),
   lastUpdatedChapterId: uuid('last_updated_chapter_id'),
 })
+
+
+// ============ Character — 出场与声音锚 ============
+
+export const characterAppearances = pgTable('character_appearances', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  characterId: uuid('character_id').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
+  chapterId: uuid('chapter_id').references(() => chapters.id).notNull(),
+  significance: integer('significance').default(0),
+  pov: boolean('pov').default(false),
+  sceneCount: integer('scene_count').default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const characterVoiceAnchors = pgTable('character_voice_anchors', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  characterId: uuid('character_id').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
+  sampleText: text('sample_text').notNull(),
+  context: text('context'),
+  isCanonical: boolean('is_canonical').default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
 
 // ============ Time 模块 ============
 
@@ -431,6 +572,33 @@ export const styleFingerprints = pgTable('style_fingerprints', {
   computedAt: timestamp('computed_at').defaultNow().notNull(),
 })
 
+
+// ============ Style — 黑名单与漂移告警 ============
+
+export const slopBlacklist = pgTable('slop_blacklist', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  pattern: text('pattern').notNull(),
+  isRegex: boolean('is_regex').default(false),
+  category: text('category').notNull(),
+  replacementStrategy: text('replacement_strategy'),
+  enabled: boolean('enabled').default(true),
+  hitCount: integer('hit_count').default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const styleDriftAlerts = pgTable('style_drift_alerts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  detectedInChapterId: uuid('detected_in_chapter_id'),
+  driftAxis: text('drift_axis').notNull(),
+  baselineValue: numeric('baseline_value'),
+  currentValue: numeric('current_value'),
+  severity: issueSeverityEnum('severity').default('warning'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
 // ============ Prompt 模块 ============
 
 export const prompts = pgTable('prompts', {
@@ -460,6 +628,21 @@ export const promptRuns = pgTable('prompt_runs', {
   ratedAt: timestamp('rated_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
+
+
+// ============ Prompt — 实验 ============
+
+export const promptExperiments = pgTable('prompt_experiments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  promptAId: uuid('prompt_a_id').references(() => prompts.id),
+  promptBId: uuid('prompt_b_id').references(() => prompts.id),
+  active: boolean('active').default(false),
+  splitRatio: numeric('split_ratio').default('0.5'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
 
 // ============ Export 模块 ============
 
@@ -515,3 +698,18 @@ export type StyleFingerprint = typeof styleFingerprints.$inferSelect
 export type Prompt = typeof prompts.$inferSelect
 export type PromptRun = typeof promptRuns.$inferSelect
 export type Export = typeof exports.$inferSelect
+export type Faction = typeof factions.$inferSelect
+export type FactionRelation = typeof factionRelations.$inferSelect
+export type TimelineEvent = typeof timelineEvents.$inferSelect
+export type CharacterAppearance = typeof characterAppearances.$inferSelect
+export type CharacterVoiceAnchor = typeof characterVoiceAnchors.$inferSelect
+export type ReviewRun = typeof reviewRuns.$inferSelect
+export type FixAttempt = typeof fixAttempts.$inferSelect
+export type AgentDecision = typeof agentDecisions.$inferSelect
+export type ToolCall = typeof toolCalls.$inferSelect
+export type SlopBlacklist = typeof slopBlacklist.$inferSelect
+export type StyleDriftAlert = typeof styleDriftAlerts.$inferSelect
+export type PromptExperiment = typeof promptExperiments.$inferSelect
+export type ChapterChunk = typeof chapterChunks.$inferSelect
+export type ScriptCharacterChunk = typeof scriptCharacterChunks.$inferSelect
+
