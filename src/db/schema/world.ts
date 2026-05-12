@@ -74,7 +74,6 @@ export const timelineEvents = pgTable('timeline_events', {
 
 export type CanonFact = typeof canonFacts.$inferSelect
 export type WorldEntry = typeof worldEntries.$inferSelect
-export type FactionMovement = typeof factionMovements.$inferSelect
 export type Faction = typeof factions.$inferSelect
 export type FactionRelation = typeof factionRelations.$inferSelect
 export type TimelineEvent = typeof timelineEvents.$inferSelect
