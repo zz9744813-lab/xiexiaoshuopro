@@ -3,7 +3,7 @@ import { createTool } from '@mastra/core/tools'
 import { z } from 'zod'
 import { db } from '@/db'
 import { canonFacts } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 
 export const getCanonFacts = createTool({
   id: 'get-canon-facts',
@@ -11,8 +11,9 @@ export const getCanonFacts = createTool({
   inputSchema: z.object({
     projectId: z.string(),
     category: z.string().optional(),
+    limit: z.number().default(20),
   }),
-  execute: async ({ projectId, category }) => {
+  execute: async ({ projectId, category, limit }) => {
     let facts = await db
       .select()
       .from(canonFacts)
@@ -22,7 +23,7 @@ export const getCanonFacts = createTool({
       facts = facts.filter(f => f.category === category)
     }
 
-    return facts.map(f => ({
+    return facts.slice(0, limit).map(f => ({
       id: f.id,
       fact: f.fact,
       category: f.category,
