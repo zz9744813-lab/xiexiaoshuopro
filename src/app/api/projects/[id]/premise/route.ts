@@ -36,7 +36,7 @@ export async function POST(
       runtimeContext: { projectId },
     });
 
-    return result.toDataStreamResponse();
+    return result.toTextStreamResponse();
   } catch (error) {
     console.error("[API] 命题生成失败:", error);
     return new Response(
