@@ -89,6 +89,22 @@ export async function POST(
       }).catch(err => console.error("[world-tick async]", err))
     )
 
+    // 6.5. 写回 auto-fix 版本
+    if (reviewResult.fixedContent) {
+      const [newVersion] = await db.insert(chapterVersions).values({
+        chapterId,
+        contentMd: reviewResult.fixedContent,
+        source: 'auto_fix',
+        parentVersionId: chapter.activeVersionId,
+        versionLabel: `auto-fix-${Date.now()}`,
+        createdBy: 'reviewWorkflow',
+      }).returning()
+
+      await db.update(chapters)
+        .set({ activeVersionId: newVersion.id })
+        .where(eq(chapters.id, chapterId))
+    }
+
     // 7. 标记章节为 finalized
     await db.update(chapters).set({
       status: "finalized",
