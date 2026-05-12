@@ -1,88 +1,77 @@
-// db/queries/chapter.ts — 章节查询层
-import { eq, and, desc, asc } from "drizzle-orm";
-import { db } from "@/db";
-import {
-  chapters,
-  chapterVersions,
-  chapterOutlines,
-  chapterSummaries,
-  chapterChunks,
-} from "@/db/schema";
+// src/db/queries/chapter.ts — Chapter query helpers
+import { eq, desc, asc, and } from 'drizzle-orm'
+import { db } from '@/db'
+import { chapters, chapterVersions, chapterSummaries } from '@/db/schema'
 
-/** 获取章节及其当前活跃版本 */
+/** Get chapter with its active version */
 export async function getChapterWithActiveVersion(chapterId: string) {
   const [chapter] = await db
     .select()
     .from(chapters)
-    .where(eq(chapters.id, chapterId));
+    .where(eq(chapters.id, chapterId))
 
-  if (!chapter?.activeVersionId) return { chapter, version: null };
+  if (!chapter) return null
 
-  const [version] = await db
+  const versions = await db
     .select()
     .from(chapterVersions)
-    .where(eq(chapterVersions.id, chapter.activeVersionId));
+    .where(eq(chapterVersions.chapterId, chapterId))
+    .orderBy(desc(chapterVersions.createdAt))
 
-  return { chapter, version };
+  return { ...chapter, versions }
 }
 
-/** 获取章节完整上下文：大纲 + 章节 + 版本 + 摘要 */
-export async function getChapterContext(chapterId: string) {
-  const { chapter, version } = await getChapterWithActiveVersion(chapterId);
-  if (!chapter) return null;
-
-  const [outline] = await db
+/** Get chapter context: outline + summaries of previous chapters */
+export async function getChapterContext(projectId: string, volumeId: string, chapterNumber: number) {
+  // Previous chapters in same volume
+  const prevChapters = await db
     .select()
-    .from(chapterOutlines)
-    .where(eq(chapterOutlines.id, chapter.outlineId));
+    .from(chapters)
+    .where(and(eq(chapters.volumeId, volumeId), eq(chapters.chapterNumber, chapterNumber - 1)))
 
-  const [summary] = await db
+  // Summaries of recent chapters
+  const recentSummaries = await db
     .select()
     .from(chapterSummaries)
-    .where(and(eq(chapterSummaries.chapterId, chapterId), eq(chapterSummaries.versionId, chapter.activeVersionId ?? "")));
+    .where(eq(chapterSummaries.projectId, projectId))
+    .orderBy(desc(chapterSummaries.createdAt))
+    .limit(5)
 
-  return { chapter, version, outline, summary };
+  return { prevChapters, recentSummaries }
 }
 
-/** 追加新版本到章节 */
-export async function appendChapterVersion(input: {
-  chapterId: string;
-  source: string;
-  contentMd: string;
-  wordCount: number;
-  modelId?: string;
-  cost?: number;
-  jobId?: string;
+/** Append a new chapter version */
+export async function appendChapterVersion(params: {
+  chapterId: string
+  contentMd: string
+  source: string
+  versionLabel?: string
+  parentVersionId?: string
 }) {
   const [version] = await db
     .insert(chapterVersions)
     .values({
-      chapterId: input.chapterId,
-      source: input.source as any,
-      contentMd: input.contentMd,
-      wordCount: input.wordCount,
-      modelId: input.modelId,
-      cost: input.cost ? String(input.cost) : null,
-      jobId: input.jobId,
+      chapterId: params.chapterId,
+      contentMd: params.contentMd,
+      source: params.source,
+      versionLabel: params.versionLabel || `v${Date.now()}`,
+      parentVersionId: params.parentVersionId || null,
     })
-    .returning();
-  return version;
+    .returning()
+
+  return version
 }
 
-/** 列出章节的所有版本 */
+/** Set active version on a chapter */
+export async function setActiveVersion(chapterId: string, versionId: string) {
+  await db.update(chapters).set({ activeVersionId: versionId }).where(eq(chapters.id, chapterId))
+}
+
+/** List all versions for a chapter */
 export async function listChapterVersions(chapterId: string) {
   return db
     .select()
     .from(chapterVersions)
     .where(eq(chapterVersions.chapterId, chapterId))
-    .orderBy(desc(chapterVersions.createdAt));
-}
-
-/** 获取章节 RAG 分块 */
-export async function getChapterChunks(chapterId: string) {
-  return db
-    .select()
-    .from(chapterChunks)
-    .where(eq(chapterChunks.chapterId, chapterId))
-    .orderBy(asc(chapterChunks.chunkIndex));
+    .orderBy(desc(chapterVersions.createdAt))
 }
