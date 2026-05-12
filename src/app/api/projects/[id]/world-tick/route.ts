@@ -1,7 +1,6 @@
 // API: 世界时钟 + between-chapter events
 import { NextRequest, NextResponse } from "next/server";
-import { generateText } from "ai";
-import { getModelForTask } from "@/lib/models";
+import { mastra } from "@/mastra";
 import { db } from "@/db";
 import { worldClock, betweenChapterEvents, projects } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -51,33 +50,17 @@ export async function POST(
       return NextResponse.json({ error: "项目不存在" }, { status: 404 });
     }
 
-    const { model, temperature, maxTokens } = getModelForTask("extract");
+    const agent = mastra.getAgent("bibleExtract");
 
-    const { text } = await generateText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: `你是一位世界观管理员。在两章之间，世界在继续运转。
-
-## 当前世界时间
-${currentWorldDate || "未设定"}
-
-## 小说类型
-${project.genre}
-
-## 任务
-生成 0-3 个在主角不在场时发生的世界事件。这些事件会在未来章节中产生影响。
-
-输出 JSON 数组：
-[{
-  "eventText": "事件描述",
-  "visibility": "hidden|hinted|revealed",
-  "visibleToCharacters": [],
-  "triggersInChapter": null
-}]
-
-如果当前没有需要发生的事件，输出空数组 []。
-直接输出 JSON。`,
+    const { text } = await agent.generate({
+      messages: [{
+        role: "user",
+        content: [
+          `genre: ${project.genre}`,
+          `current_world_date: ${currentWorldDate || "未设定"}`,
+        ].join("\n"),
+      }],
+      runtimeContext: { projectId, afterChapterId },
     });
 
     // 解析并保存事件
