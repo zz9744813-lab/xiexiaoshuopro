@@ -1,64 +1,64 @@
-// src/db/queries/job.ts — Observability / Job query helpers
-import { eq, desc } from 'drizzle-orm'
+// src/db/queries/job.ts
+import { eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { jobs, llmCalls } from '@/db/schema'
 
-/** Start a job (returns job record) */
 export async function startJob(params: {
   projectId: string
   type: string
-  context?: Record<string, unknown>
+  input?: Record<string, unknown>
+  workflowName?: string
+  workflowRunId?: string
 }) {
-  const [job] = await db
-    .insert(jobs)
-    .values({
-      projectId: params.projectId,
-      type: params.type,
-      context: params.context || {},
-      status: 'running',
-      startedAt: new Date(),
-    })
-    .returning()
+  const [job] = await db.insert(jobs).values({
+    projectId: params.projectId,
+    type: params.type,
+    input: params.input ?? {},
+    workflowName: params.workflowName,
+    workflowRunId: params.workflowRunId,
+    status: 'running',
+    startedAt: new Date(),
+  }).returning()
   return job
 }
 
-/** Mark a job as completed */
-export async function completeJob(jobId: string, result?: Record<string, unknown>) {
-  await db
-    .update(jobs)
-    .set({ status: 'completed', completedAt: new Date(), result: result || {} })
-    .where(eq(jobs.id, jobId))
+export async function completeJob(jobId: string, output?: Record<string, unknown>) {
+  await db.update(jobs).set({
+    status: 'completed',
+    completedAt: new Date(),
+    output: output ?? {},
+  }).where(eq(jobs.id, jobId))
 }
 
-/** Log an LLM call */
+export async function failJob(jobId: string, errorText: string) {
+  await db.update(jobs).set({
+    status: 'failed',
+    completedAt: new Date(),
+    errorText,
+  }).where(eq(jobs.id, jobId))
+}
+
 export async function logLlmCall(params: {
   jobId: string
+  agentName?: string
+  provider?: string
   model: string
-  promptTokens: number
-  completionTokens: number
-  cost: number
-  metadata?: Record<string, unknown>
+  inputTokens: number
+  outputTokens: number
+  costUsd: number
+  durationMs?: number
+  finishReason?: string
 }) {
-  const [log] = await db
-    .insert(llmCalls)
-    .values({
-      jobId: params.jobId,
-      model: params.model,
-      promptTokens: params.promptTokens,
-      completionTokens: params.completionTokens,
-      cost: params.cost,
-      metadata: params.metadata || {},
-    })
-    .returning()
+  const [log] = await db.insert(llmCalls).values({
+    jobId: params.jobId,
+    agentName: params.agentName,
+    provider: params.provider,
+    model: params.model,
+    inputTokens: params.inputTokens,
+    outputTokens: params.outputTokens,
+    costUsd: String(params.costUsd),
+    durationMs: params.durationMs,
+    finishReason: params.finishReason,
+  }).returning()
   return log
-}
-
-/** Get recent jobs for a project */
-export async function getProjectJobs(projectId: string, limit = 20) {
-  return db
-    .select()
-    .from(jobs)
-    .where(eq(jobs.projectId, projectId))
-    .orderBy(desc(jobs.startedAt))
-    .limit(limit)
 }
