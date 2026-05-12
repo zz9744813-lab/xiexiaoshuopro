@@ -1,3 +1,4 @@
+import { vector } from './_pgvector'
 import {
   pgTable,
   text,
@@ -30,6 +31,7 @@ export const worldEntries = pgTable('world_entries', {
   kind: text('kind').notNull(), // location|item|concept|magic|faction|rule
   name: text('name').notNull(),
   description: text('description'),
+  embedding: vector('embedding'),
   rules: text('rules'),
   parentId: uuid('parent_id'),
   appearanceCount: integer('appearance_count').default(0),
