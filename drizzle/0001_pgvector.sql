@@ -20,3 +20,14 @@ CREATE INDEX IF NOT EXISTS idx_world_entries_embedding
 CREATE INDEX IF NOT EXISTS idx_canon_facts_embedding
 --   ON canon_facts USING ivfflat (embedding vector_cosine_ops)
 --   WITH (lists = 100);
+
+-- PATCH-3: Add embedding to 3 more tables
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS embedding vector(1024);
+ALTER TABLE character_episodic_memory ADD COLUMN IF NOT EXISTS embedding vector(1024);
+ALTER TABLE chapter_summaries ADD COLUMN IF NOT EXISTS embedding vector(1024);
+ALTER TABLE chapter_chunks ADD COLUMN IF NOT EXISTS embedding vector(1024);
+
+CREATE INDEX IF NOT EXISTS idx_characters_embedding ON characters USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+CREATE INDEX IF NOT EXISTS idx_character_episodic_embedding ON character_episodic_memory USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+CREATE INDEX IF NOT EXISTS idx_chapter_summaries_embedding ON chapter_summaries USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+CREATE INDEX IF NOT EXISTS idx_chapter_chunks_embedding ON chapter_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 200);
