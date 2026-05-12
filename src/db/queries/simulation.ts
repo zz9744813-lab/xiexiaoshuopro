@@ -1,95 +1,80 @@
-// db/queries/simulation.ts — 推演查询层
-import { eq, asc, desc } from "drizzle-orm";
-import { db } from "@/db";
+// src/db/queries/simulation.ts — Simulation query helpers
+import { eq, desc } from 'drizzle-orm'
+import { db } from '@/db'
 import {
   simulations,
   simulationTurns,
-  simulationScripts,
   simulationCharacterStates,
-} from "@/db/schema";
+} from '@/db/schema'
 
-/** 创建推演 */
-export async function createSimulation(input: {
-  projectId: string;
-  chapterId: string;
-  scenario: string;
-  participatingCharacterIds: string[];
+/** Create a new simulation */
+export async function createSimulation(params: {
+  projectId: string
+  sceneContext: string
+  participantIds: string[]
 }) {
   const [sim] = await db
     .insert(simulations)
     .values({
-      projectId: input.projectId,
-      chapterId: input.chapterId,
-      scenario: input.scenario,
-      participatingCharacterIds: input.participatingCharacterIds,
-      status: "estimating",
+      projectId: params.projectId,
+      sceneContext: params.sceneContext,
+      participantIds: params.participantIds,
+      status: 'estimating',
     })
-    .returning();
-  return sim;
+    .returning()
+  return sim
 }
 
-/** 追加推演回合 */
-export async function appendTurn(input: {
-  simulationId: string;
-  speakerId: string;
-  speakerRole: string;
-  content: string;
-  reasoning?: string;
-  visibleTo: string[];
-  turnIndex: number;
+/** Append a turn to a simulation */
+export async function appendTurn(params: {
+  simulationId: string
+  speakerId: string
+  speakerName: string
+  content: string
+  reasoning?: string
+  visibleTo: string[]
 }) {
   const [turn] = await db
     .insert(simulationTurns)
     .values({
-      simulationId: input.simulationId,
-      speakerId: input.speakerId,
-      speakerRole: input.speakerRole,
-      content: input.content,
-      reasoning: input.reasoning,
-      visibleTo: input.visibleTo,
-      turnIndex: input.turnIndex,
+      simulationId: params.simulationId,
+      speakerId: params.speakerId,
+      speakerName: params.speakerName,
+      content: params.content,
+      reasoning: params.reasoning || null,
+      visibleTo: params.visibleTo,
     })
-    .returning();
-  return turn;
+    .returning()
+  return turn
 }
 
-/** 保存角色推演状态快照 */
-export async function snapshotCharacterState(input: {
-  simulationId: string;
-  characterId: string;
-  physicalState: string;
-  emotionalState: string;
-  currentGoal: string;
-  knowledgeState?: any;
+/** Snapshot character state during simulation */
+export async function snapshotCharacterState(params: {
+  simulationId: string
+  characterId: string
+  state: Record<string, unknown>
 }) {
-  const [state] = await db
+  const [snap] = await db
     .insert(simulationCharacterStates)
     .values({
-      simulationId: input.simulationId,
-      characterId: input.characterId,
-      physicalState: input.physicalState,
-      emotionalState: input.emotionalState,
-      currentGoal: input.currentGoal,
-      knowledgeState: input.knowledgeState,
+      simulationId: params.simulationId,
+      characterId: params.characterId,
+      state: params.state,
     })
-    .returning();
-  return state;
+    .returning()
+  return snap
 }
 
-/** 获取推演的回合（按角色过滤可见性） */
-export async function getTurnsForCharacter(simulationId: string, characterId: string) {
-  return db
+/** Get simulation with turns */
+export async function getSimulation(simulationId: string) {
+  const [sim] = await db.select().from(simulations).where(eq(simulations.id, simulationId))
+  if (!sim) return null
+
+  const turns = await db
     .select()
     .from(simulationTurns)
     .where(eq(simulationTurns.simulationId, simulationId))
-    .orderBy(asc(simulationTurns.turnIndex));
-}
+    .orderBy(desc(simulationTurns.createdAt))
 
-/** 获取推演剧本 */
-export async function getSimulationScripts(simulationId: string) {
-  return db
-    .select()
-    .from(simulationScripts)
-    .where(eq(simulationScripts.simulationId, simulationId))
-    .orderBy(desc(simulationScripts.createdAt));
+  return { ...sim, turns }
 }
