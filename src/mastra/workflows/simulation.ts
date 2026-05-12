@@ -103,6 +103,7 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
         secretMotive: speakingChar.secretMotive,
         trueIntent: speakingChar.secretMotive, // 复用 secretMotive
         voiceMd: speakingChar.voiceMd || '自然',
+        voiceProfile: speakingChar.voiceProfile,
         currentEmotionalState: '',
         knowledgeFacts: speakingChar.knowledgeFacts || [],
         knowledgeSuspected: [],
