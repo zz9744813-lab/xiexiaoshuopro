@@ -2,6 +2,7 @@
 import { Agent } from '@mastra/core/agent'
 import type { LanguageModelV1 } from '@ai-sdk/provider'
 import { readPromptSync, parseFrontmatter, renderPrompt } from '@/lib/prompts'
+import { voiceToPromptText } from '@/lib/voice-converter'
 
 const promptRaw = readPromptSync('agents/character-agent.md')
 const { body: promptTemplate } = promptRaw
@@ -21,6 +22,7 @@ export function createCharacterAgent(
     secretMotive: string
     trueIntent: string
     voiceMd: string
+    voiceProfile?: import('@/types/voice').VoiceProfile
     currentEmotionalState: string
     knowledgeFacts: string[]
     knowledgeSuspected: string[]
@@ -32,7 +34,7 @@ export function createCharacterAgent(
     public_role: character.publicRole,
     secret_motive: character.secretMotive,
     true_intent: character.trueIntent,
-    voice_md: character.voiceMd || '自然说话',
+    voice_md: voiceToPromptText(character.voiceMd, character.voiceProfile) || '自然说话',
     current_emotional_state: character.currentEmotionalState || '平静',
     knowledge_facts: (character.knowledgeFacts || []).join('\n') || '无特殊知识',
     knowledge_suspected: (character.knowledgeSuspected || []).join('\n') || '无',
