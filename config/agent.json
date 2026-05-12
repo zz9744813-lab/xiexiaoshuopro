@@ -1,0 +1,13 @@
+{
+  "agent": {
+    "max_turns": 200,
+    "narrator_interval": 3,
+    "temperature": 0.5,
+    "character_temperature": 0.9,
+    "auto_continue_on_max_iterations": {
+      "enabled": true,
+      "max_auto_continues": 3,
+      "prompt": "Continue autonomously from the current state. Do not repeat completed work. Stop and summarize if blocked, if approval is required, or before destructive or externally visible actions."
+    }
+  }
+}
