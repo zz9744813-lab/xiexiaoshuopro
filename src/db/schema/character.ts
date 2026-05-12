@@ -1,3 +1,4 @@
+import { vector } from './_pgvector'
 import {
   pgTable,
   text,
@@ -23,6 +24,7 @@ export const characters = pgTable('characters', {
   appearance: text('appearance'),
   publicRole: text('public_role'),
   voiceMd: text('voice_md'),
+  embedding: vector('embedding'),
   voiceSamples: jsonb('voice_samples'),
   secretMotive: text('secret_motive'),
   trueIntent: text('true_intent'),
@@ -52,6 +54,7 @@ export const characterEpisodicMemory = pgTable('character_episodic_memory', {
   importance: integer('importance'), // 0..10
   sourceChapterId: uuid('source_chapter_id'),
   sourceSimulationId: uuid('source_simulation_id'),
+  embedding: vector('embedding'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
