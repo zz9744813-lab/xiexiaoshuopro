@@ -1,3 +1,4 @@
+import { relationshipUpdateAgent } from './agents/relationship-update'
 // mastra/index.ts - Mastra 核心配置
 import { Mastra } from '@mastra/core'
 import { deepseekChat, deepseekReasoner } from '@/lib/models'
@@ -59,6 +60,7 @@ export const mastra = new Mastra({
     canonFixer: canonFixer(fixerModel),
     continuityFixer: continuityFixer(fixerModel),
     slopFixer: slopFixer(fixerModel),
+    relationshipUpdate: relationshipUpdateAgent,
     characterCreator: characterCreator(createModel),
     characterEvolver: characterEvolver(createModel),
     relationshipMapper: relationshipMapper(createModel),
