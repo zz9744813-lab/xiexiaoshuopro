@@ -19,6 +19,10 @@ import {
 import { canonFixer } from './agents/fixer/canon'
 import { continuityFixer } from './agents/fixer/continuity'
 import { slopFixer } from './agents/fixer/slop'
+import { characterCreator } from './agents/character-creator'
+import { characterEvolver } from './agents/character-evolver'
+import { relationshipMapper } from './agents/relationship-mapper'
+import { knowledgeDiffAgent } from './agents/knowledge-diff'
 import * as tools from './tools'
 
 // 为不同任务选择合适的模型
@@ -26,6 +30,7 @@ const draftModel = deepseekChat()
 const fixerModel = deepseekChat()
 const reviewModel = deepseekChat()
 const reasonerModel = deepseekReasoner()
+const createModel = deepseekChat()
 
 export const mastra = new Mastra({
   agents: {
@@ -53,6 +58,10 @@ export const mastra = new Mastra({
     canonFixer: canonFixer(fixerModel),
     continuityFixer: continuityFixer(fixerModel),
     slopFixer: slopFixer(fixerModel),
+    characterCreator: characterCreator(createModel),
+    characterEvolver: characterEvolver(createModel),
+    relationshipMapper: relationshipMapper(createModel),
+    knowledgeDiff: knowledgeDiffAgent(createModel),
   },
   tools: {
     searchBible: tools.searchBible,
