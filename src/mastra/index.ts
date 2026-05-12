@@ -23,6 +23,7 @@ import { characterCreator } from './agents/character-creator'
 import { characterEvolver } from './agents/character-evolver'
 import { relationshipMapper } from './agents/relationship-mapper'
 import { knowledgeDiffAgent } from './agents/knowledge-diff'
+import { worldTickAgent } from './agents/world-tick'
 import * as tools from './tools'
 
 // 为不同任务选择合适的模型
@@ -62,6 +63,7 @@ export const mastra = new Mastra({
     characterEvolver: characterEvolver(createModel),
     relationshipMapper: relationshipMapper(createModel),
     knowledgeDiff: knowledgeDiffAgent(createModel),
+    worldTick: worldTickAgent(createModel),
   },
   tools: {
     searchBible: tools.searchBible,
