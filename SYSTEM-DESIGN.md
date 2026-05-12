@@ -2459,3 +2459,34 @@ async function weeklyEval() {
 每加一个模块，记住先问一句："如果这个模块完全不存在，主流程还能跑吗？"——能跑，就晚一点做；不能跑，就立刻做。
 
 文档本身也是一个 artifact——它会随着你写的过程发现新需求。**把这份 spec 也放在 git 里、随项目演化版本**。
+
+## 实现状态 (2026-05-12)
+
+| 模块 | 设计目标 | 实现 | 缺口 |
+|------|---------|------|------|
+| TypeScript 编译 | 0 error | 已修复全部已知编译错误 | 需 CI 验证 |
+| Schema 表 | 45 表 | 45 表完整 | pgvector extension 待部署 |
+| Agent 注册 | 全部注册 | 18 agent 已注册 | _unused 目录保留 14 个备用 |
+| Reviewer | 11 reviewer | 11 全部接入 workflow | 需集成测试验证 |
+| Fixer | 3 fixer | canon/continuity/slop fixer 已注册 | 需真跑验证 |
+| Auto-fix loop | review 后自动修复 | 已实现 severity-based auto-fix | 需测试 |
+| Issue 落库 | 持久化 | review workflow 批量写入 | - |
+| 流式协议 | 统一 text stream | toTextStreamResponse 全仓库统一 | - |
+| 增量落库 | 流式中途 flush | generate route 已实现 | - |
+| pgvector | 1024 维语义检索 | migration + embed.ts + search-bible 已实现 | EMBED_API_URL 需配置 |
+| Validation | 所有写入 API | 共用 validation.ts + zod schemas | 各 route 需逐个接 |
+| PG 健康检查 | /api/health | 已实现 SELECT 1 + pool status | - |
+| World Tick | 章节间事件 | workflow 已实现 | worldTick agent prompt 待完善 |
+| Bible Extraction | fact + entry 入库 | workflow 已实现 + embedding | - |
+| Simulation 隔离 | visibleTo 硬验证 | 测试文件已创建 | 需 vitest 跑通 |
+| Knowledge Delta | 推演后回写 | knowledge-diff agent + prompt 已创建 | simulation.ts 需接入 |
+| 前端编辑器 | 9+ 子组件 | 9 个 stub 已创建 | 需 Tiptap 集成 |
+| Issue 中心 | 四列看板 | 5 个组件 + API 已创建 | 需样式 |
+| 推演中心 | 多列气泡 | 5 个组件 + page 已创建 | 需 SSE 接入 |
+| Mastra Memory | 跨章节记忆 | memory.ts 已创建 | 需 npm install @mastra/pg |
+| 多层摘要 | 章/卷/书 | 待实现 | - |
+| 伏笔追踪 | 新建 schema | 待实现 | - |
+| 关系多维化 | 重构 schema | 待实现 | - |
+| Hermes 集成 | 白名单中间件 | 待实现 | - |
+
+已完成 Phase A-H。Phase I-K 为架构深化阶段。
