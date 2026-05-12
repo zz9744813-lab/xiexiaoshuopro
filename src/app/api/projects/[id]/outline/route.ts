@@ -39,7 +39,7 @@ export async function POST(
 
     const context = [
       `genre: ${project.genre}`,
-      `volume_thesis: ${volumeThesis}`,
+      `volume_thesis: ${volumeThesis || "未设定"}`,
       `arc_beats: ${JSON.stringify(arcBeats || [], null, 2)}`,
       `chapter_count: ${chapterCount || 10}`,
     ].join("\n");
