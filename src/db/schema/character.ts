@@ -116,6 +116,18 @@ export const characterVoiceAnchors = pgTable('character_voice_anchors', {
 
 
 
+
+export const relationshipSnapshots = pgTable('relationship_snapshots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  relationshipId: uuid('relationship_id').references(() => characterRelationships.id, { onDelete: 'cascade' }).notNull(),
+  chapterId: uuid('chapter_id').references(() => chapters.id).notNull(),
+  dimensions: jsonb('dimensions'),
+  triggerEvent: text('trigger_event'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export type RelationshipSnapshot = typeof relationshipSnapshots.$inferSelect
+
 export type Character = typeof characters.$inferSelect
 export type CharacterTier = typeof characterTierEnum.$inferSelect
 export type CharacterRelationship = typeof characterRelationships.$inferSelect
