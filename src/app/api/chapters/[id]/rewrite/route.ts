@@ -24,7 +24,7 @@ export async function POST(
       runtimeContext: { projectId, chapterId },
     });
 
-    return result.toDataStreamResponse();
+    return result.toTextStreamResponse();
   } catch (error) {
     console.error("[API] 重写失败:", error);
     return new Response(
