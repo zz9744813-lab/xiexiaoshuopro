@@ -1,0 +1,695 @@
+import {
+  pgTable,
+  text,
+  timestamp,
+  integer,
+  boolean,
+  jsonb,
+  pgEnum,
+  uuid,
+  numeric,
+} from 'drizzle-orm/pg-core'
+import { safetyLevelEnum } from './enums'
+
+// ============ Project 模块 ============
+
+export const projects = pgTable('projects', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  genre: text('genre').notNull(),
+  genreConfig: jsonb('genre_config'),
+  voiceMd: text('voice_md'),
+  authorNotes: text('author_notes'),
+  modelRouting: jsonb('model_routing'),
+  safetyLevel: safetyLevelEnum('safety_level').default('normal'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+export const projectSettings = pgTable('project_settings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  key: text('key').notNull(),
+  value: jsonb('value'),
+})
+
+// ============ Outline 模块 ============
+
+export const volumes = pgTable('volumes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  volumeNum: integer('volume_num').notNull(),
+  title: text('title').notNull(),
+  thesis: text('thesis'),
+  arcBeats: jsonb('arc_beats'),
+  readerPromise: text('reader_promise'),
+  status: volumeStatusEnum('status').default('planning'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  finalizedAt: timestamp('finalized_at'),
+})
+
+export const chapterOutlines = pgTable('chapter_outlines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  volumeId: uuid('volume_id').references(() => volumes.id, { onDelete: 'cascade' }).notNull(),
+  chapterNum: integer('chapter_num').notNull(),
+  title: text('title').notNull(),
+  beatsMd: text('beats_md'),
+  targetWordCount: integer('target_word_count').default(5000),
+  povCharacterId: uuid('pov_character_id'),
+  primaryLocationId: uuid('primary_location_id'),
+  charactersPresent: jsonb('characters_present'),
+  deliversArcBeats: jsonb('delivers_arc_beats'),
+  hookIntent: text('hook_intent'),
+  status: chapterOutlineStatusEnum('status').default('outline'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const sceneMarkers = pgTable('scene_markers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chapterOutlineId: uuid('chapter_outline_id').references(() => chapterOutlines.id, { onDelete: 'cascade' }).notNull(),
+  order: integer('order').notNull(),
+  sceneType: sceneTypeEnum('scene_type').notNull(),
+  goal: text('goal'),
+  povCharacterId: uuid('pov_character_id'),
+  charactersPresent: jsonb('characters_present'),
+  estimatedWords: integer('estimated_words'),
+  isSimulationCandidate: boolean('is_simulation_candidate').default(false),
+})
+
+// ============ Generation 模块 ============
+
+export const chapters = pgTable('chapters', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chapterOutlineId: uuid('chapter_outline_id').references(() => chapterOutlines.id).notNull(),
+  chapterNum: integer('chapter_num').notNull(),
+  title: text('title').notNull(),
+  status: chapterOutlineStatusEnum('status').default('outline'),
+  activeVersionId: uuid('active_version_id'),
+  finalizedAt: timestamp('finalized_at'),
+  finalizedWordCount: integer('finalized_word_count'),
+})
+
+export const chapterVersions = pgTable('chapter_versions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'cascade' }).notNull(),
+  versionLabel: text('version_label'),
+  contentMd: text('content_md'),
+  source: chapterVersionSourceEnum('source').default('initial'),
+  parentVersionId: uuid('parent_version_id'),
+  diffFromParent: text('diff_from_parent'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  createdBy: text('created_by'),
+})
+
+export const chapterSummaries = pgTable('chapter_summaries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'cascade' }).notNull(),
+  versionId: uuid('version_id'),
+  shortSummary: text('short_summary'),
+  longSummary: text('long_summary'),
+  emotionalArc: text('emotional_arc'),
+  keyEvents: jsonb('key_events'),
+  readerQuestionsRaised: jsonb('reader_questions_raised'),
+  readerQuestionsAnswered: jsonb('reader_questions_answered'),
+})
+
+
+// ============ Generation — RAG 分块 ============
+
+export const chapterChunks = pgTable('chapter_chunks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chapterId: uuid('chapter_id').references(() => chapters.id, { onDelete: 'cascade' }).notNull(),
+  chunkText: text('chunk_text').notNull(),
+  chunkIdx: integer('chunk_idx').notNull(),
+  povCharacterId: uuid('pov_character_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Character 模块 ============
+
+export const characters = pgTable('characters', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  tier: characterTierEnum('tier').default('walk_on'),
+  appearance: text('appearance'),
+  publicRole: text('public_role'),
+  voiceMd: text('voice_md'),
+  voiceSamples: jsonb('voice_samples'),
+  secretMotive: text('secret_motive'),
+  trueIntent: text('true_intent'),
+  arcGoal: text('arc_goal'),
+  arcPosition: integer('arc_position').default(0),
+  arcMilestones: jsonb('arc_milestones'),
+  currentEmotionalState: text('current_emotional_state'),
+  currentLocationId: uuid('current_location_id'),
+  alive: boolean('alive').default(true),
+  appearanceCount: integer('appearance_count').default(0),
+  firstAppearanceChapterId: uuid('first_appearance_chapter_id'),
+  lastAppearanceChapterId: uuid('last_appearance_chapter_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+// ============ World / Bible 模块 ============
+
+export const canonFacts = pgTable('canon_facts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  fact: text('fact').notNull(),
+  category: text('category'),
+  sourceChapterId: uuid('source_chapter_id'),
+  immutable: boolean('immutable').default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const worldEntries = pgTable('world_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  kind: text('kind').notNull(), // location|item|concept|magic|faction|rule
+  name: text('name').notNull(),
+  description: text('description'),
+  rules: text('rules'),
+  parentId: uuid('parent_id'),
+  appearanceCount: integer('appearance_count').default(0),
+  firstAppearanceChapterId: uuid('first_appearance_chapter_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ World / Bible — 势力与时间线 ============
+
+export const factions = pgTable('factions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  ideology: text('ideology'),
+  powerLevel: integer('power_level'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const factionRelations = pgTable('faction_relations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  factionA: uuid('faction_a').references(() => factions.id, { onDelete: 'cascade' }).notNull(),
+  factionB: uuid('faction_b').references(() => factions.id, { onDelete: 'cascade' }).notNull(),
+  relation: text('relation').notNull(), // ally|enemy|neutral|tense|trade
+  notes: text('notes'),
+  changedInChapterId: uuid('changed_in_chapter_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const timelineEvents = pgTable('timeline_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  worldYear: text('world_year'),
+  storyChapterId: uuid('story_chapter_id'),
+  eventText: text('event_text').notNull(),
+  participants: jsonb('participants'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Observability 模块 ============
+
+export const jobs = pgTable('jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id),
+  type: text('type').notNull(),
+  status: jobStatusEnum('status').default('pending'),
+  workflowName: text('workflow_name'),
+  workflowRunId: text('workflow_run_id'),
+  input: jsonb('input'),
+  output: jsonb('output'),
+  parentJobId: uuid('parent_job_id'),
+  errorText: text('error_text'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  totalCostUsd: numeric('total_cost_usd'),
+  totalTokensIn: integer('total_tokens_in'),
+  totalTokensOut: integer('total_tokens_out'),
+})
+
+export const llmCalls = pgTable('llm_calls', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobId: uuid('job_id').references(() => jobs.id),
+  agentName: text('agent_name'),
+  provider: text('provider'),
+  model: text('model'),
+  promptId: text('prompt_id'),
+  promptVersion: integer('prompt_version'),
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
+  costUsd: numeric('cost_usd'),
+  durationMs: integer('duration_ms'),
+  finishReason: text('finish_reason'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Observability — 决策与工具调用 ============
+
+export const agentDecisions = pgTable('agent_decisions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobId: uuid('job_id').references(() => jobs.id),
+  agentName: text('agent_name').notNull(),
+  decisionType: text('decision_type').notNull(),
+  contextSummary: text('context_summary'),
+  chosenOption: text('chosen_option'),
+  alternativesConsidered: jsonb('alternatives_considered'),
+  rationale: text('rationale'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const toolCalls = pgTable('tool_calls', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobId: uuid('job_id').references(() => jobs.id),
+  agentName: text('agent_name'),
+  toolName: text('tool_name').notNull(),
+  input: jsonb('input'),
+  output: jsonb('output'),
+  durationMs: integer('duration_ms'),
+  errorText: text('error_text'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Review / Issue 模块 ============
+
+export const issues = pgTable('issues', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  scope: text('scope').notNull(), // paragraph|scene|chapter|volume|book|character|world
+  scopeId: text('scope_id'),
+  axis: text('axis').notNull(), // logic|voice|canon|pacing|theme|genre|reader|aislop|...
+  severity: issueSeverityEnum('severity').default('warning'),
+  title: text('title').notNull(),
+  description: text('description'),
+  evidence: text('evidence'),
+  proposedFix: text('proposed_fix'),
+  proposedFixDiff: text('proposed_fix_diff'),
+  status: issueStatusEnum('status').default('open'),
+  reviewerAgent: text('reviewer_agent'),
+  relatedIssueIds: jsonb('related_issue_ids'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  resolvedAt: timestamp('resolved_at'),
+  dismissedReason: text('dismissed_reason'),
+})
+
+
+// ============ Review — 审计记录与修复尝试 ============
+
+export const reviewRuns = pgTable('review_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  scope: text('scope').notNull(),
+  scopeId: text('scope_id'),
+  reviewersInvoked: jsonb('reviewers_invoked'),
+  totalIssuesFound: integer('total_issues_found').default(0),
+  totalCritical: integer('total_critical').default(0),
+  durationMs: integer('duration_ms'),
+  costUsd: numeric('cost_usd'),
+  triggeredBy: text('triggered_by').default('auto'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const fixAttempts = pgTable('fix_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  issueId: uuid('issue_id').references(() => issues.id, { onDelete: 'cascade' }).notNull(),
+  attemptIdx: integer('attempt_idx').notNull(),
+  fixAgent: text('fix_agent'),
+  beforeText: text('before_text'),
+  afterText: text('after_text'),
+  diffMd: text('diff_md'),
+  outcome: text('outcome'),
+  costUsd: numeric('cost_usd'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Simulation 模块 ============
+
+export const simulationStatusEnum = pgEnum('simulation_status', [
+  'estimating', 'running', 'paused', 'done', 'failed', 'cancelled'
+])
+
+export const simulations = pgTable('simulations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sceneMarkerId: uuid('scene_marker_id'),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  status: simulationStatusEnum('status').default('estimating'),
+  estimatedCostUsd: numeric('estimated_cost_usd'),
+  actualCostUsd: numeric('actual_cost_usd'),
+  estimatedDurationSec: integer('estimated_duration_sec'),
+  actualDurationSec: integer('actual_duration_sec'),
+  charactersInvolved: jsonb('characters_involved'),
+  directorGoal: text('director_goal'),
+  directorConstraints: jsonb('director_constraints'),
+  povChoice: text('pov_choice'),
+  startingWorldState: jsonb('starting_world_state'),
+  endingWorldState: jsonb('ending_world_state'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  startedAt: timestamp('started_at'),
+  endedAt: timestamp('ended_at'),
+})
+
+export const simulationTurnSpeakerEnum = pgEnum('simulation_turn_speaker', [
+  'director', 'character', 'narrator', 'injection'
+])
+
+export const simulationTurns = pgTable('simulation_turns', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  simulationId: uuid('simulation_id').references(() => simulations.id, { onDelete: 'cascade' }).notNull(),
+  turnIdx: integer('turn_idx').notNull(),
+  speakerType: simulationTurnSpeakerEnum('speaker_type').notNull(),
+  speakerId: text('speaker_id'),
+  utterance: text('utterance'),
+  reasoning: text('reasoning'),
+  visibleTo: jsonb('visible_to'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const simulationScripts = pgTable('simulation_scripts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  simulationId: uuid('simulation_id').references(() => simulations.id, { onDelete: 'cascade' }).notNull(),
+  scriptMd: text('script_md'),
+  rawTurns: jsonb('raw_turns'),
+  turnCount: integer('turn_count'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const simulationCharacterStates = pgTable('simulation_character_states', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  simulationId: uuid('simulation_id').references(() => simulations.id, { onDelete: 'cascade' }).notNull(),
+  characterId: uuid('character_id').references(() => characters.id).notNull(),
+  preKnowledgeSnapshot: jsonb('pre_knowledge_snapshot'),
+  postKnowledgeSnapshot: jsonb('post_knowledge_snapshot'),
+  knowledgeDelta: jsonb('knowledge_delta'),
+  preEmotionalState: text('pre_emotional_state'),
+  postEmotionalState: text('post_emotional_state'),
+  preRelationships: jsonb('pre_relationships'),
+  postRelationships: jsonb('post_relationships'),
+})
+
+
+// ============ Simulation — 角色剧本切片 ============
+
+export const scriptCharacterChunks = pgTable('script_character_chunks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  simulationScriptId: uuid('simulation_script_id').references(() => simulationScripts.id, { onDelete: 'cascade' }).notNull(),
+  characterId: uuid('character_id').references(() => characters.id).notNull(),
+  chunkText: text('chunk_text').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Memory 模块 ============
+
+export const characterEpisodicMemory = pgTable('character_episodic_memory', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  characterId: uuid('character_id').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
+  episodeType: text('episode_type').notNull(), // conversation|action|witnessed|learned|felt
+  summary: text('summary').notNull(),
+  participants: jsonb('participants'),
+  emotionalValence: integer('emotional_valence'), // -10..10
+  importance: integer('importance'), // 0..10
+  sourceChapterId: uuid('source_chapter_id'),
+  sourceSimulationId: uuid('source_simulation_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const characterKnowledge = pgTable('character_knowledge', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  characterId: uuid('character_id').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
+  category: text('category').notNull(), // fact|suspected|lie
+  content: text('content').notNull(),
+  sourceChapterId: uuid('source_chapter_id'),
+  sourceEvent: text('source_event'),
+  certainty: integer('certainty'), // 0-100
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const characterRelationships = pgTable('character_relationships', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  characterA: uuid('character_a').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
+  characterB: uuid('character_b').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
+  relationType: text('relation_type'), // family|romantic|hostile|mentor|...
+  warmth: integer('warmth'), // -100..100
+  trust: integer('trust'), // 0..100
+  historyMd: text('history_md'),
+  lastUpdatedChapterId: uuid('last_updated_chapter_id'),
+})
+
+
+// ============ Character — 出场与声音锚 ============
+
+export const characterAppearances = pgTable('character_appearances', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  characterId: uuid('character_id').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
+  chapterId: uuid('chapter_id').references(() => chapters.id).notNull(),
+  significance: integer('significance').default(0),
+  pov: boolean('pov').default(false),
+  sceneCount: integer('scene_count').default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const characterVoiceAnchors = pgTable('character_voice_anchors', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  characterId: uuid('character_id').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
+  sampleText: text('sample_text').notNull(),
+  context: text('context'),
+  isCanonical: boolean('is_canonical').default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Time 模块 ============
+
+export const worldClock = pgTable('world_clock', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  currentWorldDate: text('current_world_date'),
+  currentChapterId: uuid('current_chapter_id'),
+  paceConfig: jsonb('pace_config'),
+})
+
+export const betweenChapterEvents = pgTable('between_chapter_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  afterChapterId: uuid('after_chapter_id'),
+  eventText: text('event_text').notNull(),
+  visibility: text('visibility').notNull(), // hidden|hinted|revealed
+  visibleToCharacters: jsonb('visible_to_characters'),
+  triggersInChapterId: uuid('triggers_in_chapter_id'),
+  createdByAgent: text('created_by_agent'),
+  acknowledgedByUser: boolean('acknowledged_by_user').default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const factionMovements = pgTable('faction_movements', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  factionId: uuid('faction_id'),
+  afterChapterId: uuid('after_chapter_id'),
+  action: text('action'),
+  targetFactionId: uuid('target_faction_id'),
+  effect: text('effect'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+// ============ Version 模块 ============
+
+export const versionDependencies = pgTable('version_dependencies', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  downstreamChapterId: uuid('downstream_chapter_id').references(() => chapters.id).notNull(),
+  upstreamChapterId: uuid('upstream_chapter_id').references(() => chapters.id).notNull(),
+  upstreamVersionId: uuid('upstream_version_id'),
+  dependencyType: text('dependency_type'), // summary|character_state|canon|world_event
+  detectedAt: timestamp('detected_at').defaultNow().notNull(),
+})
+
+export const versionBranches = pgTable('version_branches', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  chapterId: uuid('chapter_id').references(() => chapters.id).notNull(),
+  name: text('name').notNull(),
+  headVersionId: uuid('head_version_id'),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+// ============ Style 模块 ============
+
+export const voiceCards = pgTable('voice_cards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  scope: text('scope').notNull(), // project|character|narrator
+  scopeId: text('scope_id'),
+  cardMd: text('card_md'),
+  positiveSamples: jsonb('positive_samples'),
+  negativeSamples: jsonb('negative_samples'),
+  doUseWords: jsonb('do_use_words'),
+  dontUseWords: jsonb('dont_use_words'),
+  preferredSentenceLength: text('preferred_sentence_length'),
+  preferredPov: text('preferred_pov'),
+  activeVersion: integer('active_version').default(1),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const styleFingerprints = pgTable('style_fingerprints', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chapterId: uuid('chapter_id').references(() => chapters.id),
+  versionId: uuid('version_id'),
+  avgSentenceLength: numeric('avg_sentence_length'),
+  sentenceLengthVariance: numeric('sentence_length_variance'),
+  vocabRichness: numeric('vocab_richness'),
+  metaphorDensity: numeric('metaphor_density'),
+  dialogueRatio: numeric('dialogue_ratio'),
+  repeatedPhrases: jsonb('repeated_phrases'),
+  computedAt: timestamp('computed_at').defaultNow().notNull(),
+})
+
+
+// ============ Style — 黑名单与漂移告警 ============
+
+export const slopBlacklist = pgTable('slop_blacklist', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  pattern: text('pattern').notNull(),
+  isRegex: boolean('is_regex').default(false),
+  category: text('category').notNull(),
+  replacementStrategy: text('replacement_strategy'),
+  enabled: boolean('enabled').default(true),
+  hitCount: integer('hit_count').default(0),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const styleDriftAlerts = pgTable('style_drift_alerts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  detectedInChapterId: uuid('detected_in_chapter_id'),
+  driftAxis: text('drift_axis').notNull(),
+  baselineValue: numeric('baseline_value'),
+  currentValue: numeric('current_value'),
+  severity: issueSeverityEnum('severity').default('warning'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Prompt 模块 ============
+
+export const prompts = pgTable('prompts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  version: integer('version').notNull().default(1),
+  scope: text('scope').notNull(), // agent|tool|workflow
+  templateMd: text('template_md'),
+  frontmatter: jsonb('frontmatter'),
+  requiredVars: jsonb('required_vars'),
+  optionalVars: jsonb('optional_vars'),
+  active: boolean('active').default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const promptRuns = pgTable('prompt_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  promptId: uuid('prompt_id').references(() => prompts.id),
+  version: integer('version'),
+  jobId: uuid('job_id'),
+  agentName: text('agent_name'),
+  inputVars: jsonb('input_vars'),
+  renderedText: text('rendered_text'),
+  outputText: text('output_text'),
+  rating: integer('rating'),
+  ratedAt: timestamp('rated_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Prompt — 实验 ============
+
+export const promptExperiments = pgTable('prompt_experiments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  name: text('name').notNull(),
+  promptAId: uuid('prompt_a_id').references(() => prompts.id),
+  promptBId: uuid('prompt_b_id').references(() => prompts.id),
+  active: boolean('active').default(false),
+  splitRatio: numeric('split_ratio').default('0.5'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+
+// ============ Export 模块 ============
+
+export const exports = pgTable('exports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  format: text('format').notNull(), // md|epub|docx|pdf
+  scope: text('scope').notNull(), // chapter|volume|full
+  scopeId: text('scope_id'),
+  config: jsonb('config'),
+  outputPath: text('output_path'),
+  status: jobStatusEnum('status').default('pending'),
+  errorText: text('error_text'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+})
+
+// ============ Type Exports ============
+
+export type Project = typeof projects.$inferSelect
+export type ProjectSettings = typeof projectSettings.$inferSelect
+export type Volume = typeof volumes.$inferSelect
+export type VolumeStatus = typeof volumeStatusEnum.enumValues[number]
+export type ChapterOutline = typeof chapterOutlines.$inferSelect
+export type ChapterOutlineStatus = typeof chapterOutlineStatusEnum.enumValues[number]
+export type SceneMarker = typeof sceneMarkers.$inferSelect
+export type Chapter = typeof chapters.$inferSelect
+export type ChapterVersion = typeof chapterVersions.$inferSelect
+export type ChapterVersionSource = typeof chapterVersionSourceEnum.enumValues[number]
+export type ChapterSummary = typeof chapterSummaries.$inferSelect
+export type Character = typeof characters.$inferSelect
+export type CharacterTier = typeof characterTierEnum.enumValues[number]
+export type CanonFact = typeof canonFacts.$inferSelect
+export type WorldEntry = typeof worldEntries.$inferSelect
+export type Job = typeof jobs.$inferSelect
+export type JobStatus = typeof jobStatusEnum.enumValues[number]
+export type LlmCall = typeof llmCalls.$inferSelect
+export type Issue = typeof issues.$inferSelect
+export type IssueSeverity = typeof issueSeverityEnum.enumValues[number]
+export type IssueStatus = typeof issueStatusEnum.enumValues[number]
+export type Simulation = typeof simulations.$inferSelect
+export type SimulationTurn = typeof simulationTurns.$inferSelect
+export type SimulationScript = typeof simulationScripts.$inferSelect
+export type SimulationCharacterState = typeof simulationCharacterStates.$inferSelect
+export type WorldClock = typeof worldClock.$inferSelect
+export type CharacterRelationship = typeof characterRelationships.$inferSelect
+export type BetweenChapterEvent = typeof betweenChapterEvents.$inferSelect
+export type FactionMovement = typeof factionMovements.$inferSelect
+export type VersionDependency = typeof versionDependencies.$inferSelect
+export type VersionBranch = typeof versionBranches.$inferSelect
+export type VoiceCard = typeof voiceCards.$inferSelect
+export type StyleFingerprint = typeof styleFingerprints.$inferSelect
+export type Prompt = typeof prompts.$inferSelect
+export type PromptRun = typeof promptRuns.$inferSelect
+export type Export = typeof exports.$inferSelect
+export type Faction = typeof factions.$inferSelect
+export type FactionRelation = typeof factionRelations.$inferSelect
+export type TimelineEvent = typeof timelineEvents.$inferSelect
+export type CharacterAppearance = typeof characterAppearances.$inferSelect
+export type CharacterVoiceAnchor = typeof characterVoiceAnchors.$inferSelect
+export type ReviewRun = typeof reviewRuns.$inferSelect
+export type FixAttempt = typeof fixAttempts.$inferSelect
+export type AgentDecision = typeof agentDecisions.$inferSelect
+export type ToolCall = typeof toolCalls.$inferSelect
+export type SlopBlacklist = typeof slopBlacklist.$inferSelect
+export type StyleDriftAlert = typeof styleDriftAlerts.$inferSelect
+export type PromptExperiment = typeof promptExperiments.$inferSelect
+export type ChapterChunk = typeof chapterChunks.$inferSelect
+export type ScriptCharacterChunk = typeof scriptCharacterChunks.$inferSelect
+
+export type Project = typeof projects.$inferSelect
+export type ProjectSettings = typeof projectSettings.$inferSelect
