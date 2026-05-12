@@ -1,3 +1,4 @@
+import { vector } from './_pgvector'
 import {
   pgTable,
   text,
