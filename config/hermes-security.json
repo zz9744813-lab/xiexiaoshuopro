@@ -1,0 +1,40 @@
+// config/hermes-security.json
+{
+  "whitelist": {
+    "paths": [
+      "/api/health",
+      "/api/projects",
+      "/api/projects/:id",
+      "/api/projects/:id/premise",
+      "/api/projects/:id/outline",
+      "/api/projects/:id/volumes",
+      "/api/simulations",
+      "/api/chapters/:id",
+      "/api/chapters/:id/generate",
+      "/api/chapters/:id/rewrite",
+      "/api/chapters/:id/review",
+      "/api/chapters/:id/finalize"
+    ],
+    "methods": ["GET", "POST", "PATCH"]
+  },
+  "blacklist": {
+    "paths": [
+      "/api/admin",
+      "/api/system",
+      "/api/debug"
+    ],
+    "ipPrefixes": [],
+    "rateLimit": {
+      "windowMs": 60000,
+      "maxRequests": 60
+    }
+  },
+  "circuit_breaker": {
+    "enabled": true,
+    "maxLlmCallsPerMinute": 20,
+    "maxTokensPerMinute": 200000,
+    "maxCostPerHour": 5.0,
+    "cooldownMinutes": 5,
+    "alertEmail": "1873298001@qq.com"
+  }
+}
