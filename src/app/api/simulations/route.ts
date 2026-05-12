@@ -1,10 +1,9 @@
 // API: 推演管理
 import { NextRequest, NextResponse } from "next/server";
-import { streamText } from "ai";
-import { getModelForTask } from "@/lib/models";
+import { mastra } from "@/mastra";
 import { db } from "@/db";
-import { simulations, simulationTurns, characters } from "@/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { simulations, characters } from "@/db/schema";
+import { inArray } from "drizzle-orm";
 
 // POST: 启动推演
 export async function POST(request: NextRequest) {
@@ -50,45 +49,36 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    // 构建推演 prompt
+    // 构建上下文
     const characterDescriptions = involvedCharacters
       .map((c) => `- ${c.name}（${c.publicRole || "未知身份"}）：${c.secretMotive || "无特殊动机"}`)
       .join("\n");
 
-    const { model, temperature, maxTokens } = getModelForTask("simulation");
+    const contextPrompt = [
+      `director_goal: ${directorGoal}`,
+      `characters: ${characterDescriptions}`,
+      `pov: ${povChoice || "第三人称全知"}`,
+      `max_turns: ${maxTurns}`,
+    ].join("\n");
 
-    const systemPrompt = `你是一位小说推演导演。你需要模拟以下角色之间的互动场景。
+    // 通过 Mastra director agent
+    const agent = mastra.getAgent("director");
 
-## 场景目标
-${directorGoal}
-
-## 参与角色
-${characterDescriptions}
-
-## POV
-${povChoice || "第三人称全知"}
-
-## 规则
-1. 每个角色的行为必须符合其性格和动机
-2. 角色只能基于自己知道的信息做决策
-3. 每轮输出一个角色的言行，格式为：
-   【角色名】：（动作描写）"对话内容"
-   [内心]：角色的内心想法（其他角色不可见）
-4. 在适当时机推进剧情，不要原地踏步
-5. 当场景目标达成或达到自然结束点时，输出 [END]
-6. 最多 ${maxTurns} 轮
-
-开始推演：`;
-
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens * 5, // 推演需要更多 token
-      prompt: systemPrompt,
+    const result = await agent.stream({
+      messages: [
+        {
+          role: "user",
+          content: contextPrompt,
+        },
+      ],
+      runtimeContext: {
+        projectId,
+        simulationId: simulation.id,
+      },
     });
 
     // 返回推演 ID + 流式内容
-    return result.toTextStreamResponse({
+    return result.toDataStreamResponse({
       headers: {
         "X-Simulation-Id": simulation.id,
       },
