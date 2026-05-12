@@ -1,3 +1,4 @@
+import { sharedMemory } from '@/lib/memory'
 // mastra/agents/character-agent.ts - 角色扮演 Agent（模板化，prompt 文件模式）
 import { Agent } from '@mastra/core/agent'
 import type { LanguageModelV1 } from '@ai-sdk/provider'
@@ -42,6 +43,7 @@ export function createCharacterAgent(
   })
 
   return new Agent({
+    memory: sharedMemory,
     id: `character-${character.id}`,
     name: `character-${character.name}`,
     instructions,
