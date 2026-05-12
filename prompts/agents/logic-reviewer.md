@@ -27,7 +27,7 @@ streaming: false
 直接输出 JSON 数组（不要包裹在代码块中），每个 issue 包含：
 
 ```json
-[{"title": "问题标题", "severity": "critical|warning|info", "description": "详细描述", "evidence": "引用原文", "proposedFix": "修复建议"}]
+[{"axis": "logic", "severity": "critical|warning|info", "title": "问题标题", "description": "详细描述", "evidence": "引用原文", "proposed_fix": "修复建议"}]
 ```
 
 如果没有问题，输出空数组 `[]`。
