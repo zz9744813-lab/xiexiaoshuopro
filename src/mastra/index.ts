@@ -14,6 +14,7 @@ import { narratorAgent } from './agents/narrator'
 import {
   logicReviewer, voiceReviewer, canonReviewer, pacingReviewer,
   themeReviewer, genreReviewer, readerSimulator, slopReviewer,
+  volumeReviewer, continuityReviewer, relationshipReviewer,
 } from './agents/reviewers'
 import * as tools from './tools'
 
@@ -42,6 +43,9 @@ export const mastra = new Mastra({
     genreReviewer: genreReviewer(reviewModel),
     readerSimulator: readerSimulator(draftModel),
     slopReviewer: slopReviewer(reviewModel),
+    volumeReviewer: volumeReviewer(reviewModel),
+    continuityReviewer: continuityReviewer(reviewModel),
+    relationshipReviewer: relationshipReviewer(reviewModel),
   },
   tools: {
     searchBible: tools.searchBible,
