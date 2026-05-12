@@ -6,7 +6,7 @@ export function genreReviewer(model: LanguageModelV1) {
   return new Agent({
     id: 'genre-reviewer',
     name: 'genre-reviewer',
-    instructions: readPromptSync('agents/genre-reviewer.md')
+    instructions: readPromptSync('agents/reviewer/genre.md')
       || '检查章节是否满足类型契约。输出 JSON 数组。',
     model,
   })
