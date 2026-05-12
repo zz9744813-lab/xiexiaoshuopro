@@ -66,6 +66,27 @@ export const chapterChunks = pgTable('chapter_chunks', {
 
 
 
+
+export const summaryLevelEnum = pgEnum('summary_level', ['chapter', 'volume', 'book'])
+
+export const multiLevelSummaries = pgTable('multi_level_summaries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  level: summaryLevelEnum('level').notNull(),
+  parentId: uuid('parent_id'),
+  title: text('title').notNull(),
+  shortSummary: text('short_summary'),
+  longSummary: text('long_summary'),
+  keyEvents: jsonb('key_events').default([]),
+  emotionalArc: text('emotional_arc'),
+  readerQuestions: jsonb('reader_questions').default([]),
+  embedding: vector('embedding'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+export type MultiLevelSummary = typeof multiLevelSummaries.$inferSelect
+
 export type Chapter = typeof chapters.$inferSelect
 export type ChapterVersion = typeof chapterVersions.$inferSelect
 export type ChapterVersionSource = typeof chapterVersionSourceEnum.$inferSelect
