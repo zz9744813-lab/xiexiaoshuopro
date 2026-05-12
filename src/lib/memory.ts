@@ -36,3 +36,11 @@ export const sharedMemory = new Memory({
 export function createAgentMemory(agentId: string) {
   return sharedMemory
 }
+
+export function characterThreadId(projectId: string, characterId: string) {
+  return `${projectId}:char:${characterId}`
+}
+
+export function characterResourceId(characterId: string) {
+  return `character:${characterId}`
+}
