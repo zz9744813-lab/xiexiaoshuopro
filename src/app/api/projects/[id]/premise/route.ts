@@ -12,7 +12,6 @@ export async function POST(
   const { id: projectId } = await params;
 
   try {
-    // 获取项目信息
     const [project] = await db
       .select()
       .from(projects)
