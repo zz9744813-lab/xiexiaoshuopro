@@ -6,7 +6,7 @@ export function volumeReviewer(model: LanguageModelV1) {
   return new Agent({
     id: 'volume-reviewer',
     name: 'volume-reviewer',
-    instructions: readPromptSync('agents/volume-reviewer.md')
+    instructions: readPromptSync('agents/reviewer/volume.md')
       || '检查章节在整卷结构中的位置和功能是否合理。输出 JSON 数组。',
     model,
   })
