@@ -14,6 +14,7 @@ export interface SimulationInput {
     publicRole: string
     secretMotive: string
     voiceMd: string
+    voiceProfile?: import('@/types/voice').VoiceProfile
     knowledgeFacts: string[]
   }>
   maxTurns: number
