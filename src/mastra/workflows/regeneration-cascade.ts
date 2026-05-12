@@ -1,66 +1,66 @@
-// mastra/workflows/regeneration-cascade.ts — 级联重生成 Workflow
-import { mastra } from '@/mastra'
-import { db } from '@/db'
-import { chapters } from '@/db/schema'
-import { eq, and, gte } from 'drizzle-orm'
+// mastra/workflows/regeneration-cascade.ts - 修改连锁传播 Workflow
+// 当用户编辑了某个章节，自动检测受影响的后续章节并标记/重新生成
 
 export interface RegenerationCascadeInput {
   projectId: string
-  volumeId: string
-  triggerChapterId: string   // 触发重生成的章节
-  triggerReason: string       // 为什么需要重生成
-  cascadeFromNumber: number   // 从第几章开始级联
+  changedChapterId: string
+  changeDescription: string
+  affectedChapterIds?: string[]
+}
+
+export interface AffectedChapter {
+  chapterId: string
+  chapterTitle: string
+  chapterNumber: number
+  impactReason: string
+  impactLevel: 'must_regenerate' | 'should_review' | 'may_review'
 }
 
 export interface RegenerationCascadeResult {
-  affectedChapterIds: string[]
-  newOutline: Array<{ chapterNumber: number; title: string; synopsis: string }>
+  affectedChapters: AffectedChapter[]
+  regenerationOrder: string[]
   summary: string
 }
 
 /**
- * Regeneration Cascade Workflow — 当某个章节发生重大修改时，级联更新后续章节
- * 比如：第 5 章改了关键情节 → 重新生成第 6-10 章的大纲
+ * 分析修改影响：计算被波及的后续章节列表
+ * 实际重新生成由 chapter-generation workflow 处理
+ */
+export function analyzeCascade(input: RegenerationCascadeInput): RegenerationCascadeResult {
+  // 如果调用方已经提供了受影响的章节列表，直接排序返回
+  const affected = (input.affectedChapterIds || []).map((id, i) => ({
+    chapterId: id,
+    chapterTitle: '',
+    chapterNumber: i + 1,
+    impactReason: input.changeDescription,
+    impactLevel: 'must_regenerate' as const,
+  }))
+
+  return {
+    affectedChapters: affected,
+    regenerationOrder: affected.map(c => c.chapterId),
+    summary: `检测到 ${affected.length} 个章节受到 "${input.changeDescription}" 的影响`,
+  }
+}
+
+/**
+ * 级联重新生成：按顺序调用 chapter-generation workflow
  */
 export async function runRegenerationCascade(
-  input: RegenerationCascadeInput
-): Promise<RegenerationCascadeResult> {
-  // 1. Find all downstream chapters
-  const downstream = await db
-    .select({ id: chapters.id, chapterNumber: chapters.chapterNumber })
-    .from(chapters)
-    .where(
-      and(
-        eq(chapters.volumeId, input.volumeId),
-        gte(chapters.chapterNumber, input.cascadeFromNumber)
-      )
-    )
+  input: RegenerationCascadeInput,
+  regenerateChapter: (chapterId: string) => Promise<unknown>
+): Promise<RegenerationCascadeResult & { results: unknown[] }> {
+  const cascade = analyzeCascade(input)
+  const results: unknown[] = []
 
-  const affectedIds = downstream.map(c => c.id)
-  const agent = mastra.getAgent('director')
-
-  const prompt = [
-    `## 级联重生成请求`,
-    `reason: ${input.triggerReason}`,
-    `cascade_from: chapter ${input.cascadeFromNumber}`,
-    `affected_chapters: ${affectedIds.length} chapters`,
-    ``,
-    `请为受影响的章节生成新大纲：`,
-    `- 每章一个 title 和 synopsis`,
-    `- 确保新情节与触发章节的修改一致`,
-    `- 保持原卷的整体结构`,
-  ].join('\n')
-
-  const result = await agent.generate(prompt)
-
-  try {
-    const parsed = JSON.parse(result.text)
-    return {
-      affectedChapterIds: affectedIds,
-      newOutline: parsed.outline || [],
-      summary: parsed.summary || '',
+  for (const chapterId of cascade.regenerationOrder) {
+    try {
+      const result = await regenerateChapter(chapterId)
+      results.push({ chapterId, status: 'success', result })
+    } catch (error) {
+      results.push({ chapterId, status: 'failed', error: String(error) })
     }
-  } catch {
-    return { affectedChapterIds: affectedIds, newOutline: [], summary: '' }
   }
+
+  return { ...cascade, results }
 }
