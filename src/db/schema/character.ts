@@ -69,15 +69,26 @@ export const characterKnowledge = pgTable('character_knowledge', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
+export const relationshipDirectionEnum = pgEnum('relationship_direction', ['asymmetric', 'symmetric'])
+
 export const characterRelationships = pgTable('character_relationships', {
   id: uuid('id').primaryKey().defaultRandom(),
   characterA: uuid('character_a').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
   characterB: uuid('character_b').references(() => characters.id, { onDelete: 'cascade' }).notNull(),
   relationType: text('relation_type'), // family|romantic|hostile|mentor|...
   warmth: integer('warmth'), // -100..100
-  trust: integer('trust'), // 0..100
+  trust: integer('trust'),
+  admiration: integer('admiration'),
+  fear: integer('fear'),
+  desire: integer('desire'),
+  respect: integer('respect'),
+  jealousy: integer('jealousy'),
+  dependency: integer('dependency'),
+  obligation: integer('obligation'),
+  secrecy: integer('secrecy'), // 0..100
   historyMd: text('history_md'),
   lastUpdatedChapterId: uuid('last_updated_chapter_id'),
+  direction: relationshipDirectionEnum('direction').default('symmetric'),
 })
 
 
