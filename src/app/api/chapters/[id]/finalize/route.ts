@@ -1,7 +1,6 @@
 // API: 章节定稿 - 真正触发审查 + 摘要 + Bible 抽取 + 世界时钟
 import { NextRequest, NextResponse } from "next/server";
-import { generateText } from "ai";
-import { getModelForTask } from "@/lib/models";
+import { mastra } from "@/mastra";
 import { db } from "@/db";
 import { chapters, chapterVersions, chapterSummaries, betweenChapterEvents, projects, volumes, chapterOutlines } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -41,18 +40,16 @@ export async function POST(
     // 3. Slop 检测
     const slopHits = detectSlop(text);
 
-    // 4. 生成摘要（真正调 LLM）
+    // 4. 生成摘要（通过 chapterSummary agent）
     let summaryResult = null;
     try {
-      const { model, temperature, maxTokens } = getModelForTask("summary");
-      const { text: summaryText } = await generateText({
-        model, temperature, maxOutputTokens: maxTokens,
-        prompt: `为以下章节生成摘要。输出JSON：{"shortSummary":"200字摘要","longSummary":"详细摘要","keyEvents":[{"event":"事件","importance":1}],"readerQuestionsRaised":["悬念"],"readerQuestionsAnswered":["解答"]}
-
-章节内容（前6000字）：
-${text.slice(0, 6000)}
-
-直接输出JSON。`,
+      const agent = mastra.getAgent("chapterSummary");
+      const { text: summaryText } = await agent.generate({
+        messages: [{
+          role: "user",
+          content: text.slice(0, 6000),
+        }],
+        runtimeContext: { chapterId, projectId: "" },
       });
 
       const jsonMatch = summaryText.match(/\{[\s\S]*\}/);
@@ -72,7 +69,7 @@ ${text.slice(0, 6000)}
       console.error("[finalize] 摘要生成失败:", err);
     }
 
-    // 5. 世界时钟推进（生成 between-chapter events）
+    // 5. 世界时钟推进（生成 between-chapter events，通过 bibleExtract agent）
     let worldEvents: unknown[] = [];
     try {
       const [outline] = await db.select().from(chapterOutlines)
@@ -85,13 +82,13 @@ ${text.slice(0, 6000)}
 
       if (projectId) {
         const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
-        const { model, temperature, maxTokens } = getModelForTask("extract");
-        const { text: eventsText } = await generateText({
-          model, temperature, maxOutputTokens: maxTokens,
-          prompt: `你是世界观管理员。章节定稿后，生成0-2个在主角不在场时发生的世界事件。
-类型：${project?.genre || ""}
-输出JSON数组：[{"eventText":"事件","visibility":"hidden|hinted|revealed"}]
-如果没有需要发生的事件，输出 []。直接输出JSON。`,
+        const agent = mastra.getAgent("bibleExtract");
+        const { text: eventsText } = await agent.generate({
+          messages: [{
+            role: "user",
+            content: `类型：${project?.genre || ""}\n章节内容：${text.slice(0, 3000)}`,
+          }],
+          runtimeContext: { projectId, chapterId },
         });
 
         const eventsMatch = eventsText.match(/\[[\s\S]*\]/);
