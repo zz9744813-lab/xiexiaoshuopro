@@ -1,3 +1,4 @@
+import { chunkText } from '@/lib/chunk'
 // src/app/api/chapters/[id]/finalize/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { mastra } from "@/mastra"
@@ -105,7 +106,7 @@ export async function POST(
         .where(eq(chapters.id, chapterId))
     }
 
-    // 7. 标记章节为 finalized
+    // 6.5. Chunk and embed\n  const chunks = chunkText(content, { targetSize: 800, overlap: 100 })\n  // TODO: insert chapterChunks with embedding\n\n  // 7. 标记章节为 finalized
     await db.update(chapters).set({
       status: "finalized",
       finalizedAt: new Date(),
