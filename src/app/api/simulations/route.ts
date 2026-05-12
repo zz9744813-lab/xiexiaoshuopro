@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       characterIds,
       directorGoal,
       povChoice,
-      maxTurns = 30,
+      maxTurns = 90,
     } = body;
 
     if (!projectId || !characterIds?.length || !directorGoal) {
