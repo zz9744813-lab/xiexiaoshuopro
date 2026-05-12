@@ -1,4 +1,4 @@
-// API: 段落重写 (流式) — 通过 Mastra Agent 调用
+// API: 章节片段重写 — Mastra Agent
 import { NextRequest } from "next/server";
 import { mastra } from "@/mastra";
 
@@ -7,31 +7,21 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: chapterId } = await params;
-
   try {
     const body = await request.json();
-    const { selectedText, reason, contextBefore, contextAfter, voiceCard } = body;
+    const { projectId, section, instruction, context } = body;
 
-    if (!selectedText) {
-      return new Response(
-        JSON.stringify({ error: "未选择文本" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
+    const agent = mastra.getAgent("sectionRewriter");
 
-    const agent = mastra.getAgent('sectionRewriter');
-
-    const contextStr = [
-      reason ? `## 重写要求\n${reason}` : "",
-      voiceCard ? `## 声音卡\n${voiceCard}` : "",
-      contextBefore ? `## 上下文（前文）\n${contextBefore}` : "",
-      `## 需要重写的段落\n${selectedText}`,
-      contextAfter ? `## 上下文（后文）\n${contextAfter}` : "",
-    ].filter(Boolean).join("\n\n");
+    const prompt = [
+      `instruction: ${instruction}`,
+      `context: ${context || ""}`,
+      `section_to_rewrite:\n${section}`,
+    ].join("\n");
 
     const result = await agent.stream({
-      messages: [{ role: 'user', content: contextStr }],
-      runtimeContext: { chapterId },
+      messages: [{ role: "user", content: prompt }],
+      runtimeContext: { projectId, chapterId },
     });
 
     return result.toDataStreamResponse();
