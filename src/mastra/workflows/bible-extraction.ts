@@ -1,64 +1,69 @@
-// mastra/workflows/bible-extraction.ts — Bible 抽取 Workflow
+// mastra/workflows/bible-extraction.ts - Bible 提取 Workflow
+// 从新章节中自动提取 canon facts 和 world building 内容
 import { mastra } from '@/mastra'
 
 export interface BibleExtractionInput {
-  chapterContent: string
-  chapterTitle: string
   projectId: string
-  chapterNumber: number
+  chapterId: string
+  contentMd: string
+  chapterNumber?: number
+}
+
+export interface CanonFact {
+  fact: string
+  category: 'character' | 'world' | 'plot' | 'rule' | 'timeline'
+  confidence: number
+  sourceChapterId: string
+}
+
+export interface WorldEntry {
+  title: string
+  contentMd: string
+  tags: string[]
 }
 
 export interface BibleExtractionResult {
-  newCanonFacts: Array<{
-    category: string         // "character", "location", "item", "event", "rule"
-    fact: string
-    confidence: number       // 0-1
-    evidence: string
-  }>
-  worldEntries: Array<{
-    title: string
-    content: string
-    tags: string[]
-  }>
-  updatedCharacters: Array<{
-    name: string
+  canonFacts: CanonFact[]
+  worldEntries: WorldEntry[]
+  characterUpdates: Array<{
+    characterId: string
     field: string
-    oldValue?: string
-    newValue: string
+    value: string
   }>
 }
 
-/**
- * Bible Extraction Workflow — 从新完成章节中抽取 canon facts
- * 每次章节定稿后运行，自动更新世界 Bible
- */
-export async function runBibleExtraction(
-  input: BibleExtractionInput
-): Promise<BibleExtractionResult> {
+export async function runBibleExtraction(input: BibleExtractionInput): Promise<BibleExtractionResult> {
   const agent = mastra.getAgent('bibleExtract')
 
   const prompt = [
-    `## Bible 抽取任务`,
-    `chapter_title: ${input.chapterTitle}`,
-    `chapter_number: ${input.chapterNumber}`,
-    `content: ${input.chapterContent.slice(0, 8000)}`,
-    ``,
-    `从以上章节中抽取：`,
-    `1. new_canon_facts: 新确立的世界事实`,
-    `2. world_entries: 新出现的地点、物品、组织、规则`,
-    `3. updated_characters: 角色信息的更新（外貌、能力、关系变化）`,
+    `project_id: ${input.projectId}`,
+    `chapter_id: ${input.chapterId}`,
+    `chapter_number: ${input.chapterNumber || ''}`,
+    '',
+    '请从以下章节中提取所有值得记录的世界设定和 canon facts：',
+    '',
+    '--- 章节正文 ---',
+    input.contentMd.slice(0, 8000),
+    '---',
+    '',
+    '提取规则：',
+    '1. 新出现的世界规则或设定',
+    '2. 角色背景的补充信息',
+    '3. 时间线关键节点',
+    '4. 地理/环境的新信息',
+    '5. 物品/能力的新设定',
+    '',
+    '输出 JSON: { "canonFacts": [...], "worldEntries": [...], "characterUpdates": [...] }',
   ].join('\n')
 
-  const result = await agent.generate(prompt)
+  const result = await agent.generate({
+    messages: [{ role: 'user', content: prompt }],
+    runtimeContext: { projectId: input.projectId, chapterId: input.chapterId },
+  })
 
   try {
-    const parsed = JSON.parse(result.text)
-    return {
-      newCanonFacts: parsed.new_canon_facts || [],
-      worldEntries: parsed.world_entries || [],
-      updatedCharacters: parsed.updated_characters || [],
-    }
+    return JSON.parse(result.text)
   } catch {
-    return { newCanonFacts: [], worldEntries: [], updatedCharacters: [] }
+    return { canonFacts: [], worldEntries: [], characterUpdates: [] }
   }
 }
