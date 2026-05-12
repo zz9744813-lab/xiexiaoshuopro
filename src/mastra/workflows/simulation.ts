@@ -1,9 +1,9 @@
 // mastra/workflows/simulation.ts - 推演 Workflow（修复知识隔离）
 import { mastra } from '@/mastra'
 import { createCharacterAgent } from '@/mastra/agents/character-agent'
-import { getCrewModel } from '@/lib/models'
+import { getModelForTask } from '@/lib/models'
 
-const { model: simulatorModel } = getCrewModel('simulator')
+const { model: simulatorModel } = getModelForTask('simulator')
 
 export interface SimulationInput {
   projectId: string
