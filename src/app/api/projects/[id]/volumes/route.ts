@@ -1,7 +1,6 @@
 // API: 创建卷 + 生成卷大纲
 import { NextRequest, NextResponse } from "next/server";
-import { streamText } from "ai";
-import { getModelForTask } from "@/lib/models";
+import { mastra } from "@/mastra";
 import { db } from "@/db";
 import { projects, volumes } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -59,40 +58,21 @@ export async function POST(
       })
       .returning();
 
-    // 生成卷大纲（流式）
-    const { model, temperature, maxTokens } = getModelForTask("outline");
+    // 通过 Mastra volumeOutline agent 生成卷大纲
+    const agent = mastra.getAgent("volumeOutline");
 
-    const systemPrompt = `你是一位小说架构师。根据以下信息，为这一卷设计三幕弧和 arc beats。
+    const context = [
+      `genre: ${project.genre}`,
+      `thesis: ${thesis}`,
+    ].join("\n");
 
-## 小说类型
-${project.genre}
-
-## 卷命题
-${thesis}
-
-## 要求
-输出 JSON 格式的三幕弧设计：
-{
-  "acts": [
-    {"act": 1, "name": "起", "beats": [{"name": "beat名", "targetChapter": 1, "description": "描述"}]},
-    {"act": 2, "name": "承转", "beats": [...]},
-    {"act": 3, "name": "合", "beats": [...]}
-  ],
-  "readerPromise": "这卷给读者的承诺",
-  "estimatedChapters": 20
-}
-
-直接输出 JSON，不要包裹在代码块中。`;
-
-    const result = streamText({
-      model,
-      temperature,
-      maxOutputTokens: maxTokens,
-      prompt: systemPrompt,
+    const result = await agent.stream({
+      messages: [{ role: "user", content: context }],
+      runtimeContext: { projectId, volumeId: volume.id },
     });
 
     // 返回卷信息 + 流式大纲
-    return result.toTextStreamResponse({
+    return result.toDataStreamResponse({
       headers: {
         "X-Volume-Id": volume.id,
       },
