@@ -1,6 +1,5 @@
 // mastra/workflows/simulation.ts - 推演 Workflow（修复知识隔离）
-import { generateText } from 'ai'
-import { getModelForTask } from '@/lib/models'
+import { mastra } from '@/mastra'
 
 export interface SimulationInput {
   projectId: string
@@ -24,7 +23,7 @@ export interface SimulationTurn {
   speakerName: string
   utterance: string
   reasoning: string
-  visibleTo: string[] // 哪些角色能看到这条 turn
+  visibleTo: string[]
 }
 
 export interface SimulationResult {
@@ -35,14 +34,18 @@ export interface SimulationResult {
 
 /**
  * 推演 Workflow - 多轮 turn-by-turn 循环（带知识隔离）
+ * Director → Mastra director agent
+ * Narrator → Mastra narrator agent
+ * Character → Mastra character agent
  */
 export async function runSimulationWorkflow(input: SimulationInput): Promise<SimulationResult> {
   const turns: SimulationTurn[] = []
-  const { model, temperature, maxTokens } = getModelForTask('simulation')
 
   const characterDescriptions = input.characters
     .map(c => `- ${c.name}（${c.publicRole}）`)
     .join('\n')
+
+  const runtimeCtx = { projectId: input.projectId }
 
   for (let turnIdx = 0; turnIdx < input.maxTurns; turnIdx++) {
     // Director 只看 utterance（公开信息），不看 reasoning
@@ -50,27 +53,22 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
       .map(t => `[${t.speakerName}]: ${t.utterance}`)
       .join('\n')
 
-    // Director 决策
-    const { text: directorResponse } = await generateText({
-      model,
-      temperature: 0.7,
-      maxOutputTokens: 500,
-      prompt: `你是推演导演。场景目标：${input.directorGoal}
-
-参与角色：
-${characterDescriptions}
-
-已发生（公开行为）：
-${publicHistory || '（刚开始）'}
-
-决定下一步。输出JSON：
-{"action":"speak|end","targetName":"角色名","reason":"理由"}
-
-如果场景目标已达成或对话自然结束，action 为 "end"。`,
-    })
-
-    let directorDecision
+    // Director 决策 — 使用 Mastra agent
+    const directorAgent = mastra.getAgent('director')
+    let directorDecision: { action: string; reason: string; targetName?: string }
     try {
+      const { text: directorResponse } = await directorAgent.generate({
+        messages: [{
+          role: 'user',
+          content: [
+            `director_goal: ${input.directorGoal}`,
+            `characters: ${characterDescriptions}`,
+            `history:\n${publicHistory || '（刚开始）'}`,
+          ].join('\n'),
+        }],
+        runtimeContext: runtimeCtx,
+      })
+
       const match = directorResponse.match(/\{[\s\S]*\}/)
       directorDecision = match ? JSON.parse(match[0]) : { action: 'end', reason: '无法解析' }
     } catch {
@@ -86,32 +84,58 @@ ${publicHistory || '（刚开始）'}
     // ===== 知识隔离：角色只能看到 visibleTo 包含自己的 turns =====
     const visibleTurns = turns.filter(t => t.visibleTo.includes(speakingChar.id))
     const characterVisibleHistory = visibleTurns
-      .map(t => `[${t.speakerName}]: ${t.utterance}`) // 只看 utterance，不看 reasoning
+      .map(t => `[${t.speakerName}]: ${t.utterance}`)
       .join('\n')
 
-    // 角色发言（只注入自己的私密信息 + 可见的历史）
-    const { text: characterResponse } = await generateText({
-      model,
-      temperature: 0.9,
-      maxOutputTokens: maxTokens,
-      prompt: `你是「${speakingChar.name}」，${speakingChar.publicRole}。
-秘密动机：${speakingChar.secretMotive}
-声音：${speakingChar.voiceMd || '自然'}
-你知道的事：${speakingChar.knowledgeFacts.join('；') || '无特殊'}
-
-你能看到的场景（其他角色的内心你不知道）：
-${characterVisibleHistory || '（刚开始）'}
-
-以你的身份回应。输出JSON：
-{"utterance":"你说的话或动作","reasoning":"内心想法（其他角色看不到）"}`,
-    })
-
-    let charOutput
+    // 角色发言 — 使用 Mastra character agent
+    const characterAgent = mastra.getAgent('character')
+    let charOutput: { utterance: string; reasoning: string }
     try {
+      const { text: characterResponse } = await characterAgent.generate({
+        messages: [{
+          role: 'user',
+          content: [
+            `character_name: ${speakingChar.name}`,
+            `public_role: ${speakingChar.publicRole}`,
+            `secret_motive: ${speakingChar.secretMotive}`,
+            `voice: ${speakingChar.voiceMd || '自然'}`,
+            `knowledge_facts: ${speakingChar.knowledgeFacts.join('；') || '无特殊'}`,
+            `visible_history:\n${characterVisibleHistory || '（刚开始）'}`,
+          ].join('\n'),
+        }],
+        runtimeContext: runtimeCtx,
+      })
+
       const match = characterResponse.match(/\{[\s\S]*\}/)
       charOutput = match ? JSON.parse(match[0]) : { utterance: characterResponse, reasoning: '' }
     } catch {
-      charOutput = { utterance: characterResponse.slice(0, 200), reasoning: '' }
+      charOutput = { utterance: '(无法发言)', reasoning: '' }
+    }
+
+    // 是否需要旁白 — 使用 Mastra narrator agent
+    if (turnIdx === 0 || turnIdx % 3 === 0) {
+      const narratorAgent = mastra.getAgent('narrator')
+      try {
+        const { text: narration } = await narratorAgent.generate({
+          messages: [{
+            role: 'user',
+            content: `scene_context: ${publicHistory.slice(0, 500)}\ndirector_goal: ${input.directorGoal}`,
+          }],
+          runtimeContext: runtimeCtx,
+        })
+
+        turns.push({
+          turnIdx: turnIdx + 0.5, // fractional idx for narrator
+          speakerType: 'narrator',
+          speakerId: 'narrator',
+          speakerName: '旁白',
+          utterance: narration.slice(0, 300),
+          reasoning: '',
+          visibleTo: [], // narrator is invisible to characters
+        })
+      } catch {
+        // narration 失败不阻塞
+      }
     }
 
     // utterance 对所有人可见，reasoning 只对自己可见
@@ -121,8 +145,8 @@ ${characterVisibleHistory || '（刚开始）'}
       speakerId: speakingChar.id,
       speakerName: speakingChar.name,
       utterance: charOutput.utterance,
-      reasoning: charOutput.reasoning, // 存储但不暴露给其他角色
-      visibleTo: input.characters.map(c => c.id), // utterance 对所有人可见
+      reasoning: charOutput.reasoning,
+      visibleTo: input.characters.map(c => c.id),
     })
   }
 
