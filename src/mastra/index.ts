@@ -1,5 +1,6 @@
 // mastra/index.ts - Mastra 核心配置
 import { Mastra } from '@mastra/core'
+import { deepseekChat, deepseekReasoner } from '@/lib/models'
 import { chapterDraftAgent } from './agents/chapter-draft'
 import { chapterSummaryAgent } from './agents/chapter-summary'
 import { premiseAgent } from './agents/premise'
@@ -16,9 +17,14 @@ import {
 } from './agents/reviewers'
 import * as tools from './tools'
 
+// 为不同任务选择合适的模型
+const draftModel = deepseekChat()
+const reviewModel = deepseekChat()
+const reasonerModel = deepseekReasoner()
+
 export const mastra = new Mastra({
   agents: {
-    chapterDraft: chapterDraftAgent,
+    chapterDraft: chapterDraftAgent(draftModel),
     chapterSummary: chapterSummaryAgent,
     premise: premiseAgent,
     volumeOutline: volumeOutlineAgent,
@@ -26,16 +32,16 @@ export const mastra = new Mastra({
     bibleExtract: bibleExtractAgent,
     hook: hookAgent,
     sectionRewriter: sectionRewriterAgent,
-    director: directorAgent,
+    director: directorAgent(reviewModel),
     narrator: narratorAgent,
-    logicReviewer,
-    voiceReviewer,
-    canonReviewer,
-    pacingReviewer,
-    themeReviewer,
-    genreReviewer,
-    readerSimulator,
-    slopReviewer,
+    logicReviewer: logicReviewer(reviewModel),
+    voiceReviewer: voiceReviewer(reviewModel),
+    canonReviewer: canonReviewer(reviewModel),
+    pacingReviewer: pacingReviewer(reviewModel),
+    themeReviewer: themeReviewer(reviewModel),
+    genreReviewer: genreReviewer(reviewModel),
+    readerSimulator: readerSimulator(draftModel),
+    slopReviewer: slopReviewer(reviewModel),
   },
   tools: {
     searchBible: tools.searchBible,
