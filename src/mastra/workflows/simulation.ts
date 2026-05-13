@@ -67,6 +67,9 @@ export async function runSimulationWorkflow(input: SimulationInput): Promise<Sim
           role: 'user',
           content: [
             `director_goal: ${input.directorGoal}`,
+`scene_setup: ${input.sceneSetup || '无特定场景设置'}`,
+`scene_atmosphere: ${input.sceneAtmosphere || '无特定氛围要求'}`,
+`time_context: ${input.timeContext || '时间未指定'}`,
             `characters: ${characterDescriptions}`,
             `history:\n${publicHistory || '（刚开始）'}`,
           ].join('\n'),
