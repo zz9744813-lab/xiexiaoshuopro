@@ -77,6 +77,20 @@ export const toolCalls = pgTable('tool_calls', {
 
 
 
+
+export const hermesAuditLog = pgTable('hermes_audit_log', {
+ id: uuid('id').primaryKey().defaultRandom(),
+ method: text('method').notNull(),
+ path: text('path').notNull(),
+ reason: text('reason'),
+ callerIp: text('caller_ip'),
+ responseStatus: integer('response_status'),
+ costUsdEstimated: numeric('cost_usd_estimated'),
+ createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export type HermesAuditLogEntry = typeof hermesAuditLog.$inferSelect
+
 export type Job = typeof jobs.$inferSelect
 export type JobStatus = typeof jobStatusEnum.$inferSelect
 export type LlmCall = typeof llmCalls.$inferSelect
