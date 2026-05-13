@@ -1,0 +1,26 @@
+{
+  "id": "wuxia",
+  "name": "Wuxia",
+  "description": "Martial arts heroes in ancient China",
+  "themes": [
+    "honor",
+    "loyalty",
+    "revenge",
+    "love",
+    "martial arts"
+  ],
+  "tropes": [
+    "orphan becomes master",
+    "secret manual",
+    "martial arts tournament",
+    "forbidden love"
+  ],
+  "tone": "heroic, romantic, action-packed",
+  "pacing": "fast with emotional pauses",
+  "character_archetypes": [
+    "lone swordsman",
+    "noble hero",
+    "villainous master",
+    "martial artist maiden"
+  ]
+}

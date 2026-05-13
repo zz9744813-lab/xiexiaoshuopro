@@ -1,0 +1,26 @@
+{
+  "id": "historical",
+  "name": "Historical Fiction",
+  "description": "Stories set in the past with historical accuracy",
+  "themes": [
+    "power",
+    "survival",
+    "love",
+    "betrayal",
+    "duty"
+  ],
+  "tropes": [
+    "forbidden romance",
+    "political intrigue",
+    "war",
+    "family saga"
+  ],
+  "tone": "serious, authentic, immersive",
+  "pacing": "slow build with dramatic peaks",
+  "character_archetypes": [
+    "noble warrior",
+    "clever strategist",
+    "tragic hero",
+    "loyal servant"
+  ]
+}
