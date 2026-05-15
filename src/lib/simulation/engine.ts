@@ -26,6 +26,7 @@ import {
 } from '@/db/schema';
 import { generatePerspectiveContext } from '@/lib/context-router';
 import { callLLM } from './llm-service';
+import { publishEvent } from '@/lib/events/event-bus';
 import {
   DEFAULT_CHARACTER_SYSTEM_PROMPT,
   DEFAULT_WORLD_AGENT_SYSTEM_PROMPT,
@@ -84,6 +85,14 @@ export async function runRoundSimultaneous(
       startedAt: new Date(),
     })
     .returning();
+
+  publishEvent('round.started', {
+    worldId: params.worldId,
+    worldlineId: params.worldlineId,
+    sceneId: params.sceneId,
+    roundId: round.id,
+    data: { round_index: nextIndex },
+  });
 
   const auditFindings: Array<{ severity: string; description: string }> = [];
 
@@ -362,6 +371,18 @@ export async function runRoundSimultaneous(
       .set({ status: 'committed', completedAt: new Date() })
       .where(eq(rounds.id, round.id));
 
+    publishEvent('round.committed', {
+      worldId: params.worldId,
+      worldlineId: params.worldlineId,
+      sceneId: params.sceneId,
+      roundId: round.id,
+      data: {
+        action_count: actionRows.length,
+        event_count: eventIds.length,
+        audit_findings: auditFindings.length,
+      },
+    });
+
     return {
       roundId: round.id,
       status: 'committed',
@@ -374,6 +395,13 @@ export async function runRoundSimultaneous(
       .update(rounds)
       .set({ status: 'failed', completedAt: new Date() })
       .where(eq(rounds.id, round.id));
+    publishEvent('round.rolled_back', {
+      worldId: params.worldId,
+      worldlineId: params.worldlineId,
+      sceneId: params.sceneId,
+      roundId: round.id,
+      data: { error: String(e) },
+    });
     return {
       roundId: round.id,
       status: 'failed',
