@@ -10,6 +10,7 @@ const NAV = [
   { href: '/profiles', label: 'Profile' },
   { href: '/characters', label: '角色' },
   { href: '/simulation', label: '模拟控制台' },
+  { href: '/chapters', label: '章节' },
   { href: '/traces', label: 'Trace' },
   { href: '/memories', label: '记忆审批' },
 ];

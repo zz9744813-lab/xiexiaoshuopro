@@ -23,3 +23,4 @@ export * from './simulation-traces';
 export * from './snapshots';
 export * from './audit-logs';
 export * from './cost-logs';
+export * from './novel-chapters';
