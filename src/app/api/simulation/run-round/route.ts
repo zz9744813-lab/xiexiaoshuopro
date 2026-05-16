@@ -6,9 +6,11 @@ import { scenes, entities, worlds } from '@/db/schema';
 import { ok, badRequest, serverError } from '@/lib/api-response';
 import { getAuthContext } from '@/lib/auth';
 import { runRoundSimultaneous } from '@/lib/simulation/engine';
+import { runRoundHybrid } from '@/lib/simulation/engine-hybrid';
 
 const runRoundSchema = z.object({
   sceneId: z.string().uuid(),
+  mode: z.enum(['simultaneous', 'hybrid_two_phase']).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -24,7 +26,6 @@ export async function POST(req: NextRequest) {
     const [world] = await db.select().from(worlds).where(eq(worlds.id, scene.worldId));
     if (!world || world.ownerUserId !== auth.userId) return badRequest('Invalid world');
 
-    // Find the world_agent entity
     const allEntities = await db
       .select()
       .from(entities)
@@ -32,13 +33,19 @@ export async function POST(req: NextRequest) {
     const worldAgent = allEntities.find((e) => e.entityType === 'world_agent');
     if (!worldAgent) return badRequest('No world_agent found in this world');
 
-    const result = await runRoundSimultaneous({
+    const mode = parsed.data.mode ?? 'simultaneous';
+    const params = {
       worldId: scene.worldId,
       worldlineId: scene.worldlineId,
       sceneId: scene.id,
       participantEntityIds: scene.participantEntityIds ?? [],
       worldAgentEntityId: worldAgent.id,
-    });
+    };
+
+    const result =
+      mode === 'hybrid_two_phase'
+        ? await runRoundHybrid(params)
+        : await runRoundSimultaneous(params);
 
     return ok(result);
   } catch (e) {

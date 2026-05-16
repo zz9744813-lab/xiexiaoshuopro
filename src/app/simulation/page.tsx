@@ -58,6 +58,7 @@ export default function SimulationPage() {
   const [perspective, setPerspective] = useState<'author' | string>('author'); // entityId or 'author'
   const [participantsForm, setParticipantsForm] = useState<string[]>([]);
   const [sceneTitle, setSceneTitle] = useState('');
+  const [runMode, setRunMode] = useState<'simultaneous' | 'hybrid_two_phase'>('simultaneous');
   const esRef = useRef<EventSource | null>(null);
 
   async function loadWorlds() {
@@ -175,13 +176,65 @@ export default function SimulationPage() {
       const res = await fetch('/api/simulation/run-round', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sceneId: activeSceneId }),
+        body: JSON.stringify({ sceneId: activeSceneId, mode: runMode }),
       });
       const json = await res.json();
       if (!json.ok) alert(json.error?.message ?? '执行失败');
     } finally {
       setBusy(false);
       void loadSceneRounds();
+    }
+  }
+
+  async function forkBranch() {
+    const world = worlds.find((w) => w.id === worldId);
+    if (!world?.defaultWorldlineId) return;
+    const name = prompt('分支名称：');
+    if (!name) return;
+    const reason = prompt('分支理由（可选）：') ?? '';
+    const res = await fetch('/api/worldlines/fork', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        worldId,
+        parentWorldlineId: world.defaultWorldlineId,
+        name,
+        branchReason: reason,
+        sceneId: activeSceneId || undefined,
+      }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      alert(
+        `已 fork：复制 ${json.data.copiedMemories} 条记忆，${json.data.copiedRelationships} 条关系`,
+      );
+    } else {
+      alert(json.error?.message ?? 'fork 失败');
+    }
+  }
+
+  async function injectEvent() {
+    const world = worlds.find((w) => w.id === worldId);
+    if (!world?.defaultWorldlineId) return;
+    const summary = prompt('事件摘要（如：王都北区突然戒严）：');
+    if (!summary) return;
+    const res = await fetch('/api/directives', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        worldId,
+        worldlineId: world.defaultWorldlineId,
+        directiveType: 'inject_event',
+        mode: 'soft',
+        content: { summary, scene_id: activeSceneId || undefined },
+      }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      alert('事件已注入，下一轮主世界会读到它');
+      void loadSceneRounds();
+    } else {
+      alert(json.error?.message ?? '失败');
     }
   }
 
@@ -305,6 +358,32 @@ export default function SimulationPage() {
                       </option>
                     ))}
                   </select>
+                  <select
+                    value={runMode}
+                    onChange={(e) =>
+                      setRunMode(e.target.value as 'simultaneous' | 'hybrid_two_phase')
+                    }
+                    className="px-2 py-1 text-sm border rounded bg-white dark:bg-zinc-900"
+                  >
+                    <option value="simultaneous">同步并行</option>
+                    <option value="hybrid_two_phase">混合两段式</option>
+                  </select>
+                  <button
+                    onClick={injectEvent}
+                    disabled={!activeSceneId}
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50"
+                    title="导演投放事件"
+                  >
+                    投放事件
+                  </button>
+                  <button
+                    onClick={forkBranch}
+                    disabled={!worldId}
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50"
+                    title="从当前 worldline 创建分支"
+                  >
+                    Fork
+                  </button>
                   <button
                     onClick={runRound}
                     disabled={!activeSceneId || busy}

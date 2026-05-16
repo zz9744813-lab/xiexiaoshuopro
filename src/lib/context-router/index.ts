@@ -12,6 +12,7 @@ import {
   memories as memoriesTable,
   entities as entitiesTable,
   characters as charactersTable,
+  worlds as worldsTable,
 } from '@/db/schema';
 import { canRead, type AclTarget, type AclContext, type AclInfo } from './acl';
 import {
@@ -19,6 +20,7 @@ import {
   estimateTokens,
   type PerspectiveContext,
 } from './perspective';
+import { retrieveMemories } from '@/lib/memory/retrieval';
 
 export interface RouterInputs {
   worldId: string;
@@ -114,42 +116,73 @@ export async function generatePerspectiveContext(
     }
   }
 
-  // Memories: load all memories owned by target OR potentially shared with target.
-  // We load broadly then ACL-filter.
-  const candidateMemories = await db
-    .select()
-    .from(memoriesTable)
-    .where(
-      and(
-        eq(memoriesTable.worldId, inputs.worldId),
-        eq(memoriesTable.worldlineId, inputs.worldlineId),
-      ),
-    );
-
-  // Map to AclInfo shape (the fields canRead needs)
-  const aclMems = candidateMemories.map((m) => {
-    const info: AclInfo & {
-      _row: typeof m;
-    } = {
-      owner_entity_id: m.ownerEntityId,
-      visibility: m.visibility as AclInfo['visibility'],
-      allowed_entities: m.allowedEntities ?? [],
-      denied_entities: m.deniedEntities ?? [],
-      allowed_factions: m.allowedFactions ?? [],
-      _row: m,
-    };
-    return info;
-  });
-
+  // Memories: try semantic retrieval first (if world has embedding profile),
+  // fall back to load-all + ACL filter for MVP / when embedding not configured.
+  type MemoryRow = typeof memoriesTable.$inferSelect;
+  let readableMems: MemoryRow[] = [];
   let privateRemoved = 0;
   let worldOnlyRemoved = 0;
-  const readableMems: typeof candidateMemories = [];
-  for (const am of aclMems) {
-    if (canRead(am, aclTarget, aclCtx)) {
-      readableMems.push(am._row);
-    } else {
-      if (am.visibility === 'private') privateRemoved++;
-      else if (am.visibility === 'world_only') worldOnlyRemoved++;
+
+  // Build a query string from current context (latest speech + intentions)
+  const recentSpeech = (inputs.publicSceneLog ?? [])
+    .slice(-5)
+    .map((l) => l.spoken_text || l.visible_action || '')
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 500);
+  const queryText = recentSpeech || target.name;
+
+  let semanticUsed = false;
+  try {
+    const [worldRow] = await db.select().from(worldsTable).where(eq(worldsTable.id, inputs.worldId));
+    if (worldRow?.defaultEmbeddingProfileId && queryText.length > 0) {
+      const retrieved = await retrieveMemories({
+        worldId: inputs.worldId,
+        worldlineId: inputs.worldlineId,
+        targetEntityId: target.id,
+        query: queryText,
+        limit: 30,
+      });
+      if (retrieved.length > 0) {
+        const ids = new Set(retrieved.map((r) => r.id));
+        const allMems = await db
+          .select()
+          .from(memoriesTable)
+          .where(eq(memoriesTable.worldlineId, inputs.worldlineId));
+        readableMems = allMems.filter((m) => ids.has(m.id));
+        semanticUsed = true;
+      }
+    }
+  } catch {
+    // Fall through to non-semantic path
+  }
+
+  if (!semanticUsed) {
+    // Load all and ACL-filter (works for fresh worlds with no embedding)
+    const candidateMemories = await db
+      .select()
+      .from(memoriesTable)
+      .where(
+        and(
+          eq(memoriesTable.worldId, inputs.worldId),
+          eq(memoriesTable.worldlineId, inputs.worldlineId),
+        ),
+      );
+
+    for (const m of candidateMemories) {
+      const info: AclInfo = {
+        owner_entity_id: m.ownerEntityId,
+        visibility: m.visibility as AclInfo['visibility'],
+        allowed_entities: m.allowedEntities ?? [],
+        denied_entities: m.deniedEntities ?? [],
+        allowed_factions: m.allowedFactions ?? [],
+      };
+      if (canRead(info, aclTarget, aclCtx)) {
+        readableMems.push(m);
+      } else {
+        if (m.visibility === 'private') privateRemoved++;
+        else if (m.visibility === 'world_only') worldOnlyRemoved++;
+      }
     }
   }
 

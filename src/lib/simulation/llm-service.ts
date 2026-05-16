@@ -23,7 +23,7 @@ export interface CallOptions {
   entityId?: string;
   actionId?: string;
   promptVersionId?: string;
-  traceType: 'character_call' | 'world_agent_call' | 'novelizer_call' | 'audit' | 'replay';
+  traceType: 'character_call' | 'world_agent_call' | 'novelizer_call' | 'audit' | 'replay' | 'memory_retrieval';
   phase?: string;
   /** Schema name for output validation (optional) */
   schemaName?: SchemaName;
