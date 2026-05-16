@@ -1,17 +1,24 @@
 /**
- * Simulation engine - simultaneous mode (MVP).
- * Per spec 19.2.
+ * Simulation engine - simultaneous mode (spec § 19.2).
  *
  * Flow:
- *  1. For each participating entity, generate perspective context
- *  2. Call character LLM in parallel
- *  3. Call world_agent LLM with all character outputs
- *  4. Post-validate world_agent output (spec 27)
- *  5. Persist actions, events, memories, relationships in single transaction
- *  6. Run audit (leak detection)
+ *  1. Generate per-entity perspective contexts (parallel)
+ *  2. Call character LLMs in parallel (LLM calls are OUTSIDE the tx so traces
+ *     are preserved even on rollback - per spec § 22 / B-2)
+ *  3. Run leak detection on each character's output (audit_logs written
+ *     OUTSIDE tx so they're preserved on rollback)
+ *  4. Call world_agent LLM with character outputs
+ *  5. Run post-validation on world_agent output
+ *  6. Open a single transaction for all state mutations:
+ *     - insert actions / events / memories / memory_write_requests
+ *     - update round.status = committed
+ *     - if any audit finding has severity=critical, throw RoundAbortedError
+ *       to rollback the entire transaction
+ *  7. On failure: mark round rolled_back / paused / failed (outside tx),
+ *     write summary audit_log, publish event
  */
 
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import {
   scenes,
@@ -19,7 +26,6 @@ import {
   actions,
   events as eventsTable,
   entities as entitiesTable,
-  worlds,
   memories as memoriesTable,
   memoryWriteRequests,
   auditLogs,
@@ -34,16 +40,28 @@ import {
 } from './prompts';
 import { detectLeak, extractTokens } from '@/lib/audit/leak-detector';
 import { validateEntityStateDelta } from '@/lib/validation/entity-state-delta';
+import { registerRound, unregisterRound } from './pause-registry';
+
+export class RoundAbortedError extends Error {
+  reason: 'critical_audit' | 'world_agent_failed' | 'unknown';
+  findings: Array<{ severity: string; description: string }>;
+  constructor(
+    reason: 'critical_audit' | 'world_agent_failed' | 'unknown',
+    findings: Array<{ severity: string; description: string }>,
+    message?: string,
+  ) {
+    super(message ?? `Round aborted: ${reason}`);
+    this.reason = reason;
+    this.findings = findings;
+  }
+}
 
 export interface RunRoundParams {
   worldId: string;
   worldlineId: string;
   sceneId: string;
-  /** entity ids participating in this round */
   participantEntityIds: string[];
-  /** world_agent entity id (entity_type=world_agent) */
   worldAgentEntityId: string;
-  /** Public scene log from previous rounds */
   publicSceneLog?: Array<{
     fromEntityId?: string;
     spoken_text?: string;
@@ -54,16 +72,26 @@ export interface RunRoundParams {
 
 export interface RunRoundResult {
   roundId: string;
-  status: 'committed' | 'failed' | 'rolled_back';
+  status: 'committed' | 'failed' | 'rolled_back' | 'paused';
   actionIds: string[];
   eventIds: string[];
   auditFindings: Array<{ severity: string; description: string }>;
 }
 
+interface PreparedAction {
+  entityId: string;
+  entityName: string;
+  actionType: string;
+  publicLayer: Record<string, unknown>;
+  privateLayer: Record<string, unknown>;
+  memoryUpdate: Record<string, unknown>;
+  rawModelOutput: Record<string, unknown> | null;
+  isFallback: boolean;
+}
+
 export async function runRoundSimultaneous(
   params: RunRoundParams,
 ): Promise<RunRoundResult> {
-  // 1. Create round
   const [scene] = await db.select().from(scenes).where(eq(scenes.id, params.sceneId));
   if (!scene) throw new Error('Scene not found');
 
@@ -94,10 +122,15 @@ export async function runRoundSimultaneous(
     data: { round_index: nextIndex },
   });
 
+  // Register an AbortController so /api/scenes/[id]/pause can cancel us
+  const ac = registerRound(round.id);
+
   const auditFindings: Array<{ severity: string; description: string }> = [];
 
   try {
-    // 2. Generate perspective contexts in parallel
+    // ---------- LLM Stage (outside any tx) ----------
+
+    // 1. Generate perspective contexts in parallel
     const contexts = await Promise.all(
       params.participantEntityIds.map((eid) =>
         generatePerspectiveContext({
@@ -111,19 +144,21 @@ export async function runRoundSimultaneous(
       ),
     );
 
-    // 3. Resolve api_profile per entity, call character LLMs in parallel
+    // 2. Resolve entity rows
     const charEntities = await Promise.all(
       params.participantEntityIds.map(async (eid) => {
-        const [e] = await db.select().from(entitiesTable).where(eq(entitiesTable.id, eid));
+        const [e] = await db
+          .select()
+          .from(entitiesTable)
+          .where(eq(entitiesTable.id, eid));
         return e;
       }),
     );
 
+    // 3. Call character LLMs in parallel
     const characterCalls = await Promise.all(
       charEntities.map(async (entity, idx) => {
-        if (!entity || !entity.apiProfileId) {
-          return null;
-        }
+        if (!entity || !entity.apiProfileId) return null;
         const ctx = contexts[idx];
         const userMsg = wrapUserData('perspective_context', ctx.perspectiveContext);
         try {
@@ -143,6 +178,7 @@ export async function runRoundSimultaneous(
               phase: 'single',
               schemaName: 'character',
               inputContext: ctx.perspectiveContext,
+              signal: ac.signal,
             },
           );
           return { entity, result };
@@ -152,38 +188,33 @@ export async function runRoundSimultaneous(
       }),
     );
 
-    // Persist character actions
-    const actionRows: typeof actions.$inferSelect[] = [];
+    // 4. Build prepared actions + run leak detection (audit_logs OUTSIDE tx)
+    const prepared: PreparedAction[] = [];
     for (const c of characterCalls) {
       if (!c) continue;
       if ('error' in c && c.error) {
-        // Per spec 21.4: write a fallback silent action
-        const [row] = await db
-          .insert(actions)
-          .values({
-            roundId: round.id,
-            sceneId: params.sceneId,
-            entityId: c.entity!.id,
-            phase: 'single',
-            actionType: 'system_default',
-            publicLayer: {
-              visible_action: '他沉默了一会儿，没有立刻回应。',
-              spoken_text: '',
-              tone: '沉默',
-            },
-            privateLayer: { system_note: c.error },
-            isFallback: true,
-            status: 'completed',
-          })
-          .returning();
-        actionRows.push(row);
+        // spec § 21.4 - silent fallback action
+        prepared.push({
+          entityId: c.entity!.id,
+          entityName: c.entity!.name,
+          actionType: 'system_default',
+          publicLayer: {
+            visible_action: '他沉默了一会儿，没有立刻回应。',
+            spoken_text: '',
+            tone: '沉默',
+          },
+          privateLayer: { system_note: c.error },
+          memoryUpdate: {},
+          rawModelOutput: null,
+          isFallback: true,
+        });
         continue;
       }
       if (!('result' in c) || !c.result) continue;
-      const parsed = c.result.response.parsedJson as Record<string, unknown> | undefined;
+      const parsed =
+        (c.result.response.parsedJson as Record<string, unknown> | undefined) ?? null;
       if (!parsed) continue;
 
-      // Audit: leak detection
       const publicLayer = (parsed.public_layer as Record<string, unknown>) ?? {};
       const privateLayer = (parsed.private_layer as Record<string, unknown>) ?? {};
       const publicText = [
@@ -193,8 +224,10 @@ export async function runRoundSimultaneous(
       ]
         .filter(Boolean)
         .join(' ');
-      const privateText = [privateLayer.thought, privateLayer.intention].filter(Boolean).join(' ');
-      const sensitive = extractTokens(privateText as string);
+      const privateText = [privateLayer.thought, privateLayer.intention]
+        .filter(Boolean)
+        .join(' ');
+      const sensitive = extractTokens(String(privateText));
       const leak = detectLeak({
         privateLayerText: String(privateText),
         publicLayerText: publicText,
@@ -217,46 +250,50 @@ export async function runRoundSimultaneous(
           payload: { public_text: publicText, private_text: privateText },
         });
         if (leak.severity === 'error' || leak.severity === 'critical') {
-          // Strip leaked content from public_layer before storing
           publicLayer.spoken_text = '[本句因泄漏检测被阻断]';
           publicLayer.observable_clues = [];
         }
       }
 
-      const [row] = await db
-        .insert(actions)
-        .values({
-          roundId: round.id,
-          sceneId: params.sceneId,
-          entityId: c.entity!.id,
-          phase: 'single',
-          actionType: String(parsed.action_type ?? 'speak_only'),
-          publicLayer: publicLayer,
-          privateLayer: privateLayer,
-          memoryUpdate: (parsed.memory_update as Record<string, unknown>) ?? {},
-          rawModelOutput: parsed,
-          status: 'completed',
-        })
-        .returning();
-      actionRows.push(row);
+      prepared.push({
+        entityId: c.entity!.id,
+        entityName: c.entity!.name,
+        actionType: String(parsed.action_type ?? 'speak_only'),
+        publicLayer,
+        privateLayer,
+        memoryUpdate: (parsed.memory_update as Record<string, unknown>) ?? {},
+        rawModelOutput: parsed,
+        isFallback: false,
+      });
     }
 
-    // 4. Call world_agent
+    // 5. Call world_agent (with intermediate "view" of prepared actions)
     const [worldAgent] = await db
       .select()
       .from(entitiesTable)
       .where(eq(entitiesTable.id, params.worldAgentEntityId));
     if (!worldAgent || !worldAgent.apiProfileId) {
-      throw new Error('world_agent has no api_profile');
+      throw new RoundAbortedError(
+        'world_agent_failed',
+        auditFindings,
+        'world_agent has no api_profile',
+      );
     }
 
+    // We need action_ids in world_input but actions aren't inserted yet.
+    // Use temp ids; world_agent's output references them; we'll remap during persistence.
+    const tempIdMap = new Map<string, string>(); // tempId -> entityId
     const worldInput = {
-      actions: actionRows.map((a) => ({
-        action_id: a.id,
-        entity_id: a.entityId,
-        public_layer: a.publicLayer,
-        private_layer: a.privateLayer, // world_agent CAN see private (spec 11.1)
-      })),
+      actions: prepared.map((p) => {
+        const tempId = `tmp-${p.entityId.slice(0, 8)}`;
+        tempIdMap.set(tempId, p.entityId);
+        return {
+          action_id: tempId,
+          entity_id: p.entityId,
+          public_layer: p.publicLayer,
+          private_layer: p.privateLayer,
+        };
+      }),
       scene_id: params.sceneId,
       round_id: round.id,
     };
@@ -276,6 +313,7 @@ export async function runRoundSimultaneous(
         traceType: 'world_agent_call',
         schemaName: 'worldAgent',
         inputContext: worldInput,
+        signal: ac.signal,
       },
     );
 
@@ -284,92 +322,144 @@ export async function runRoundSimultaneous(
       | undefined;
     const roundResult = wparsed?.round_result ?? {};
 
-    // 5. Post-validate world_agent output (spec 27)
-    const entityStateDeltas = (roundResult.entity_state_deltas as Array<{
-      entity_id: string;
-      changes: unknown;
-    }>) ?? [];
+    // 6. Post-validate world_agent output (spec § 27)
+    const entityStateDeltas =
+      (roundResult.entity_state_deltas as Array<{ entity_id: string; changes: unknown }>) ??
+      [];
     for (const d of entityStateDeltas) {
       const r = validateEntityStateDelta(d.changes);
       if (!r.ok) {
-        auditFindings.push({
-          severity: 'error',
+        const finding = {
+          severity: 'error' as const,
           description: `entity_state_delta for ${d.entity_id} forbidden=${r.forbidden.join(',')} unknown=${r.unknown.join(',')}`,
-        });
-      }
-    }
-
-    // 6. Insert events
-    const publicEvents = (roundResult.public_events as Array<{
-      summary: string;
-      involved_action_ids?: string[];
-      event_level?: string;
-      importance?: number;
-    }>) ?? [];
-    const eventIds: string[] = [];
-    for (const ev of publicEvents) {
-      const [evRow] = await db
-        .insert(eventsTable)
-        .values({
+        };
+        auditFindings.push(finding);
+        await db.insert(auditLogs).values({
           worldId: params.worldId,
           worldlineId: params.worldlineId,
-          sceneId: params.sceneId,
           roundId: round.id,
-          eventType: 'simulation_event',
-          canonicalSummary: ev.summary,
-          publicSummary: ev.summary,
-          worldTime: scene.worldTime as Record<string, unknown>,
-          sourceActionIds: ev.involved_action_ids ?? [],
-          importance: (ev.importance ?? 0.5).toString(),
-          eventLevel: ev.event_level ?? 'ordinary',
-        })
-        .returning({ id: eventsTable.id });
-      eventIds.push(evRow.id);
-    }
-
-    // 7. Memory write requests
-    const mwrList = (roundResult.memory_write_requests as Array<{
-      owner_entity_id: string;
-      memory_type: string;
-      visibility: string;
-      content: string;
-      proposed_by?: string;
-      importance?: number;
-      emotional_weight?: number;
-    }>) ?? [];
-    for (const m of mwrList) {
-      const proposedBy = m.proposed_by ?? 'world_resolved';
-      if (proposedBy === 'novelizer') {
-        // Queue for approval (spec 12.4)
-        await db.insert(memoryWriteRequests).values({
-          worldId: params.worldId,
-          worldlineId: params.worldlineId,
-          proposedBy,
-          proposedPayload: m as Record<string, unknown>,
-          sourceTraceId: worldCall.traceId,
-          status: 'pending',
-        });
-      } else {
-        await db.insert(memoriesTable).values({
-          worldId: params.worldId,
-          worldlineId: params.worldlineId,
-          ownerEntityId: m.owner_entity_id,
-          memoryType: m.memory_type,
-          content: m.content,
-          visibility: m.visibility,
-          importance: (m.importance ?? 0.5).toString(),
-          emotionalWeight: (m.emotional_weight ?? 0).toString(),
-          proposedBy,
-          approvalStatus: 'auto_approved',
+          sceneId: params.sceneId,
+          auditType: 'world_agent_postvalidation',
+          severity: 'error',
+          description: finding.description,
+          payload: { delta: d } as Record<string, unknown>,
         });
       }
     }
 
-    // 8. Mark round committed
-    await db
-      .update(rounds)
-      .set({ status: 'committed', completedAt: new Date() })
-      .where(eq(rounds.id, round.id));
+    // ---------- Persistence Stage (single transaction) ----------
+    const persistResult = await db.transaction(async (tx) => {
+      // 7. Insert actions, build tempId → realId map
+      const actionRows: Array<typeof actions.$inferSelect> = [];
+      const realIdByTempId = new Map<string, string>();
+      for (const p of prepared) {
+        const [row] = await tx
+          .insert(actions)
+          .values({
+            roundId: round.id,
+            sceneId: params.sceneId,
+            entityId: p.entityId,
+            phase: 'single',
+            actionType: p.actionType,
+            publicLayer: p.publicLayer,
+            privateLayer: p.privateLayer,
+            memoryUpdate: p.memoryUpdate,
+            rawModelOutput: p.rawModelOutput,
+            isFallback: p.isFallback,
+            status: 'completed',
+          })
+          .returning();
+        actionRows.push(row);
+        const tempId = `tmp-${p.entityId.slice(0, 8)}`;
+        realIdByTempId.set(tempId, row.id);
+      }
+
+      // 8. Insert events (remap action_ids)
+      const publicEvents = (roundResult.public_events as Array<{
+        summary: string;
+        involved_action_ids?: string[];
+        event_level?: string;
+        importance?: number;
+      }>) ?? [];
+      const eventIds: string[] = [];
+      for (const ev of publicEvents) {
+        const remappedIds = (ev.involved_action_ids ?? [])
+          .map((id) => realIdByTempId.get(id) ?? id)
+          .filter((id) => actionRows.some((a) => a.id === id));
+        const [evRow] = await tx
+          .insert(eventsTable)
+          .values({
+            worldId: params.worldId,
+            worldlineId: params.worldlineId,
+            sceneId: params.sceneId,
+            roundId: round.id,
+            eventType: 'simulation_event',
+            canonicalSummary: ev.summary,
+            publicSummary: ev.summary,
+            worldTime: scene.worldTime as Record<string, unknown>,
+            sourceActionIds: remappedIds,
+            importance: (ev.importance ?? 0.5).toString(),
+            eventLevel: ev.event_level ?? 'ordinary',
+          })
+          .returning({ id: eventsTable.id });
+        eventIds.push(evRow.id);
+      }
+
+      // 9. Memory write requests
+      const mwrList = (roundResult.memory_write_requests as Array<{
+        owner_entity_id: string;
+        memory_type: string;
+        visibility: string;
+        content: string;
+        proposed_by?: string;
+        importance?: number;
+        emotional_weight?: number;
+      }>) ?? [];
+      for (const m of mwrList) {
+        const proposedBy = m.proposed_by ?? 'world_resolved';
+        if (proposedBy === 'novelizer') {
+          await tx.insert(memoryWriteRequests).values({
+            worldId: params.worldId,
+            worldlineId: params.worldlineId,
+            proposedBy,
+            proposedPayload: m as Record<string, unknown>,
+            sourceTraceId: worldCall.traceId,
+            status: 'pending',
+          });
+        } else {
+          await tx.insert(memoriesTable).values({
+            worldId: params.worldId,
+            worldlineId: params.worldlineId,
+            ownerEntityId: m.owner_entity_id,
+            memoryType: m.memory_type,
+            content: m.content,
+            visibility: m.visibility,
+            importance: (m.importance ?? 0.5).toString(),
+            emotionalWeight: (m.emotional_weight ?? 0).toString(),
+            proposedBy,
+            approvalStatus: 'auto_approved',
+          });
+        }
+      }
+
+      // 10. Pre-commit critical audit gate (spec § 22.7)
+      const criticalCount = auditFindings.filter((f) => f.severity === 'critical').length;
+      if (criticalCount > 0) {
+        throw new RoundAbortedError(
+          'critical_audit',
+          auditFindings,
+          `${criticalCount} critical audit finding(s) - rolling back round`,
+        );
+      }
+
+      // 11. Mark round committed (in same tx so it's atomic)
+      await tx
+        .update(rounds)
+        .set({ status: 'committed', completedAt: new Date() })
+        .where(eq(rounds.id, round.id));
+
+      return { actionIds: actionRows.map((a) => a.id), eventIds };
+    });
 
     publishEvent('round.committed', {
       worldId: params.worldId,
@@ -377,8 +467,8 @@ export async function runRoundSimultaneous(
       sceneId: params.sceneId,
       roundId: round.id,
       data: {
-        action_count: actionRows.length,
-        event_count: eventIds.length,
+        action_count: persistResult.actionIds.length,
+        event_count: persistResult.eventIds.length,
         audit_findings: auditFindings.length,
       },
     });
@@ -386,17 +476,28 @@ export async function runRoundSimultaneous(
     return {
       roundId: round.id,
       status: 'committed',
-      actionIds: actionRows.map((a) => a.id),
-      eventIds,
+      actionIds: persistResult.actionIds,
+      eventIds: persistResult.eventIds,
       auditFindings,
     };
   } catch (e) {
     const isBudget = e instanceof BudgetExceededError;
-    const newStatus = isBudget ? 'paused' : 'failed';
+    const isAborted = e instanceof RoundAbortedError;
+    let newStatus: 'paused' | 'rolled_back' | 'failed' = 'failed';
+    let returnStatus: RunRoundResult['status'] = 'failed';
+    if (isBudget) {
+      newStatus = 'paused';
+      returnStatus = 'paused';
+    } else if (isAborted) {
+      newStatus = 'rolled_back';
+      returnStatus = 'rolled_back';
+    }
+
     await db
       .update(rounds)
       .set({ status: newStatus, completedAt: new Date() })
       .where(eq(rounds.id, round.id));
+
     if (isBudget) {
       await db.insert(auditLogs).values({
         worldId: params.worldId,
@@ -410,29 +511,43 @@ export async function runRoundSimultaneous(
         payload: { statuses: e.statuses } as Record<string, unknown>,
       });
     }
+    if (isAborted) {
+      await db.insert(auditLogs).values({
+        worldId: params.worldId,
+        worldlineId: params.worldlineId,
+        roundId: round.id,
+        sceneId: params.sceneId,
+        auditType: 'round_aborted_by_audit',
+        severity: 'critical',
+        description: e.message,
+        actionTaken: 'transaction_rolled_back',
+        payload: { findings: e.findings } as Record<string, unknown>,
+      });
+    }
+
     publishEvent('round.rolled_back', {
       worldId: params.worldId,
       worldlineId: params.worldlineId,
       sceneId: params.sceneId,
       roundId: round.id,
-      data: { error: String(e), isBudget },
+      data: { error: String(e), isBudget, isAborted },
     });
+
     return {
       roundId: round.id,
-      status: isBudget ? 'rolled_back' : 'failed',
+      status: returnStatus,
       actionIds: [],
       eventIds: [],
-      auditFindings: [
-        {
-          severity: isBudget ? 'warning' : 'critical',
-          description: String(e),
-        },
-      ],
+      auditFindings: isAborted
+        ? e.findings
+        : [
+            {
+              severity: isBudget ? 'warning' : 'critical',
+              description: String(e),
+            },
+          ],
     };
+  } finally {
+    unregisterRound(round.id);
   }
 }
-
-// Suppress unused
-void worlds;
-void isNull;
-void and;

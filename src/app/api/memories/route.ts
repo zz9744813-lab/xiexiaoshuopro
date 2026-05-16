@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
-import { memories, entities, worlds } from '@/db/schema';
+import { memories, entities, worlds, embeddingProfiles } from '@/db/schema';
 import { ok, badRequest, serverError } from '@/lib/api-response';
 import { getAuthContext } from '@/lib/auth';
 import {
@@ -17,6 +17,7 @@ import {
   tagsSchema,
   allowedEntitiesSchema,
 } from '@/lib/validation/schemas';
+import { failValidation } from '@/lib/validation/middleware';
 
 const createMemorySchema = z.object({
   worldId: z.string().uuid(),
@@ -34,6 +35,8 @@ const createMemorySchema = z.object({
   emotionalWeight: emotionalWeightSchema.optional(),
   proposedBy: PROPOSED_BY_ENUM.optional(),
   tags: tagsSchema.optional(),
+  /** Optional client-provided embedding; must match world's embedding profile dimension */
+  embedding: z.array(z.number()).max(8192).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -65,7 +68,15 @@ export async function POST(req: NextRequest) {
     const auth = await getAuthContext();
     const body = await req.json();
     const parsed = createMemorySchema.safeParse(body);
-    if (!parsed.success) return badRequest('Invalid input', parsed.error.flatten());
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return failValidation({
+        code: 'INVALID_BODY',
+        message: issue?.message ?? 'Validation failed',
+        field: issue?.path.join('.'),
+        constraint: issue?.code,
+      });
+    }
 
     const [world] = await db.select().from(worlds).where(eq(worlds.id, parsed.data.worldId));
     if (!world || world.ownerUserId !== auth.userId) return badRequest('Invalid world');
@@ -84,6 +95,37 @@ export async function POST(req: NextRequest) {
       return badRequest(
         'novelizer-proposed memories must go through memory_write_requests, not direct insert',
       );
+    }
+
+    // Per spec § 32.18 / § 38.9 - embedding must match world's profile dimension
+    if (parsed.data.embedding && parsed.data.embedding.length > 0) {
+      if (!world.defaultEmbeddingProfileId) {
+        return failValidation({
+          code: 'EMBEDDING_DIMENSION_MISMATCH',
+          message:
+            'Cannot accept embedding: world has no default_embedding_profile_id configured',
+          field: 'embedding',
+        });
+      }
+      const [embProfile] = await db
+        .select()
+        .from(embeddingProfiles)
+        .where(eq(embeddingProfiles.id, world.defaultEmbeddingProfileId));
+      if (!embProfile) {
+        return failValidation({
+          code: 'EMBEDDING_DIMENSION_MISMATCH',
+          message: 'Embedding profile not found',
+          field: 'embedding',
+        });
+      }
+      if (parsed.data.embedding.length !== embProfile.dimension) {
+        return failValidation({
+          code: 'EMBEDDING_DIMENSION_MISMATCH',
+          message: `Embedding has ${parsed.data.embedding.length} dims, world profile expects ${embProfile.dimension}`,
+          field: 'embedding',
+          constraint: `length === ${embProfile.dimension}`,
+        });
+      }
     }
 
     const [row] = await db

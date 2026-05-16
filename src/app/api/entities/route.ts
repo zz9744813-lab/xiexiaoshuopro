@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/db';
 import { entities, characters, worlds } from '@/db/schema';
@@ -8,36 +8,20 @@ import { getAuthContext } from '@/lib/auth';
 import {
   STR,
   ENTITY_TYPE_ENUM,
-  abilityValueSchema,
-  jsonbSizeAtMost,
-  jsonDepthAtMost,
-  sampleLinesSchema,
-  forbiddenPhrasesSchema,
+  speechStyleSchema,
+  expressionProfileSchema,
+  desireProfileSchema,
+  abilityProfileSchema,
 } from '@/lib/validation/schemas';
+import { checkJsonbSize, checkJsonbDepth, failValidation } from '@/lib/validation/middleware';
 
 const characterProfileSchema = z.object({
   publicProfile: z.record(z.string(), z.unknown()).optional(),
   privateProfile: z.record(z.string(), z.unknown()).optional(),
-  speechStyle: z
-    .object({
-      sentence_length: z.string().optional(),
-      traits: z.array(z.string()).max(20).optional(),
-      forbidden_style: z.array(z.string()).max(20).optional(),
-      forbidden_phrases: forbiddenPhrasesSchema.optional(),
-      sample_lines: sampleLinesSchema.optional(),
-    })
-    .optional(),
-  expressionProfile: z.record(z.string(), z.unknown()).optional(),
-  desireProfile: z.record(z.string(), z.unknown()).optional(),
-  abilityProfile: z
-    .object({
-      perception: abilityValueSchema.optional(),
-      stealth: abilityValueSchema.optional(),
-      social_insight: abilityValueSchema.optional(),
-      combat: abilityValueSchema.optional(),
-      mobility: abilityValueSchema.optional(),
-    })
-    .optional(),
+  speechStyle: speechStyleSchema.optional(),
+  expressionProfile: expressionProfileSchema.optional(),
+  desireProfile: desireProfileSchema.optional(),
+  abilityProfile: abilityProfileSchema.optional(),
   initialPrompt: z.string().max(20000).optional(),
 });
 
@@ -57,7 +41,6 @@ export async function GET(req: NextRequest) {
     const worldId = searchParams.get('world_id');
     if (!worldId) return badRequest('world_id is required');
 
-    // Verify world ownership
     const [world] = await db.select().from(worlds).where(eq(worlds.id, worldId));
     if (!world || world.ownerUserId !== auth.userId) {
       return badRequest('Invalid world');
@@ -78,32 +61,38 @@ export async function POST(req: NextRequest) {
     const auth = await getAuthContext();
     const body = await req.json();
     const parsed = createEntitySchema.safeParse(body);
-    if (!parsed.success) return badRequest('Invalid input', parsed.error.flatten());
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return failValidation({
+        code: 'INVALID_BODY',
+        message: issue?.message ?? 'Validation failed',
+        field: issue?.path.join('.'),
+        constraint: issue?.code,
+      });
+    }
 
-    // Verify world ownership
     const [world] = await db.select().from(worlds).where(eq(worlds.id, parsed.data.worldId));
     if (!world || world.ownerUserId !== auth.userId) {
       return badRequest('Invalid world');
     }
 
-    // App-level JSONB size & depth checks (Appendix A.2 / A.4)
+    // App-level JSONB size & depth checks (spec Appendix A.2 / A.4)
     const cp = parsed.data.characterProfile;
     if (cp) {
-      for (const [key, limit] of [
-        ['publicProfile', 32 * 1024],
-        ['privateProfile', 32 * 1024],
-        ['speechStyle', 16 * 1024],
-        ['expressionProfile', 16 * 1024],
-        ['desireProfile', 16 * 1024],
-        ['abilityProfile', 4 * 1024],
-      ] as const) {
-        const v = (cp as Record<string, unknown>)[key];
-        if (v && !jsonbSizeAtMost(v, limit)) {
-          return badRequest(`${key} exceeds ${limit} bytes`);
-        }
-        if (v && !jsonDepthAtMost(v, 6)) {
-          return badRequest(`${key} JSON nesting > 6`);
-        }
+      const limits: Array<[string, unknown, number]> = [
+        ['publicProfile', cp.publicProfile, 32 * 1024],
+        ['privateProfile', cp.privateProfile, 32 * 1024],
+        ['speechStyle', cp.speechStyle, 16 * 1024],
+        ['expressionProfile', cp.expressionProfile, 16 * 1024],
+        ['desireProfile', cp.desireProfile, 16 * 1024],
+        ['abilityProfile', cp.abilityProfile, 4 * 1024],
+      ];
+      for (const [field, value, max] of limits) {
+        if (!value) continue;
+        const sizeErr = checkJsonbSize({ field, value, maxBytes: max });
+        if (sizeErr) return failValidation(sizeErr);
+        const depthErr = checkJsonbDepth({ field, value, maxDepth: 6 });
+        if (depthErr) return failValidation(depthErr);
       }
     }
 

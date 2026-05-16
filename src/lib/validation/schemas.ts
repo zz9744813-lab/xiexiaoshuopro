@@ -102,3 +102,55 @@ export function jsonDepth(obj: unknown, current = 0): number {
 export function jsonDepthAtMost(obj: unknown, maxDepth: number): boolean {
   return jsonDepth(obj) <= maxDepth;
 }
+
+// ---------- High-level composed schemas ----------
+
+/** spec § 5.2 - world_time structure */
+export const worldTimeSchema = z.object({
+  world_day: z.number().int().min(0),
+  time_block: z.string().max(20).optional(),
+  scene_clock_minutes: z.number().int().min(0).max(60 * 24 * 365).optional(),
+});
+
+/** spec § 10.1 character profile fields */
+export const speechStyleSchema = z.object({
+  sentence_length: z.string().max(40).optional(),
+  traits: z.array(z.string().max(100)).max(20).optional(),
+  forbidden_style: z.array(z.string().max(80)).max(20).optional(),
+  forbidden_phrases: forbiddenPhrasesSchema.optional(),
+  sample_lines: sampleLinesSchema.optional(),
+});
+
+export const expressionProfileSchema = z.record(
+  z.string().max(40),
+  z.array(z.string().max(200)).max(20),
+);
+
+export const desireProfileSchema = z.object({
+  core_desire: z.string().max(500).optional(),
+  fears: z.array(z.string().max(200)).max(20).optional(),
+  long_term_goal: z.string().max(500).optional(),
+  short_term_goal: z.string().max(500).optional(),
+  current_goal: z.string().max(500).optional(),
+});
+
+export const abilityProfileSchema = z.object({
+  perception: abilityValueSchema.optional(),
+  stealth: abilityValueSchema.optional(),
+  social_insight: abilityValueSchema.optional(),
+  combat: abilityValueSchema.optional(),
+  mobility: abilityValueSchema.optional(),
+});
+
+export const relationshipDimsSchema = z.object({
+  trust: relationshipDimSchema.optional(),
+  suspicion: relationshipDimSchema.optional(),
+  attraction: relationshipDimSchema.optional(),
+  fear: relationshipDimSchema.optional(),
+  guilt: relationshipDimSchema.optional(),
+  dependence: relationshipDimSchema.optional(),
+  curiosity: relationshipDimSchema.optional(),
+  hostility: relationshipDimSchema.optional(),
+  protectiveness: relationshipDimSchema.optional(),
+  control_desire: relationshipDimSchema.optional(),
+});

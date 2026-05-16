@@ -27,6 +27,7 @@ import {
 } from '@/db/schema';
 import { generatePerspectiveContext } from '@/lib/context-router';
 import { callLLM, BudgetExceededError } from './llm-service';
+import { registerRound, unregisterRound } from './pause-registry';
 import {
   DEFAULT_CHARACTER_SYSTEM_PROMPT,
   DEFAULT_WORLD_AGENT_SYSTEM_PROMPT,
@@ -112,6 +113,8 @@ export async function runRoundHybrid(params: HybridRoundParams): Promise<HybridR
     data: { mode: 'hybrid_two_phase' },
   });
 
+  const ac = registerRound(round.id);
+
   const auditFindings: HybridRoundResult['auditFindings'] = [];
   const intentActionIds: string[] = [];
   const publicActionIds: string[] = [];
@@ -163,6 +166,7 @@ export async function runRoundHybrid(params: HybridRoundParams): Promise<HybridR
               phase: 'intent',
               schemaName: 'character',
               inputContext: ctx.perspectiveContext,
+              signal: ac.signal,
             },
           );
           return { entity, result };
@@ -262,6 +266,7 @@ export async function runRoundHybrid(params: HybridRoundParams): Promise<HybridR
         phase: 'public',
         schemaName: 'worldAgent',
         inputContext: worldInput,
+        signal: ac.signal,
       },
     );
 
@@ -487,5 +492,7 @@ export async function runRoundHybrid(params: HybridRoundParams): Promise<HybridR
         },
       ],
     };
+  } finally {
+    unregisterRound(round.id);
   }
 }
