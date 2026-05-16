@@ -25,7 +25,7 @@ import {
   auditLogs,
 } from '@/db/schema';
 import { generatePerspectiveContext } from '@/lib/context-router';
-import { callLLM } from './llm-service';
+import { callLLM, BudgetExceededError } from './llm-service';
 import { publishEvent } from '@/lib/events/event-bus';
 import {
   DEFAULT_CHARACTER_SYSTEM_PROMPT,
@@ -391,23 +391,43 @@ export async function runRoundSimultaneous(
       auditFindings,
     };
   } catch (e) {
+    const isBudget = e instanceof BudgetExceededError;
+    const newStatus = isBudget ? 'paused' : 'failed';
     await db
       .update(rounds)
-      .set({ status: 'failed', completedAt: new Date() })
+      .set({ status: newStatus, completedAt: new Date() })
       .where(eq(rounds.id, round.id));
+    if (isBudget) {
+      await db.insert(auditLogs).values({
+        worldId: params.worldId,
+        worldlineId: params.worldlineId,
+        roundId: round.id,
+        sceneId: params.sceneId,
+        auditType: 'budget_exceeded',
+        severity: 'warning',
+        description: e.message,
+        actionTaken: 'round_paused',
+        payload: { statuses: e.statuses } as Record<string, unknown>,
+      });
+    }
     publishEvent('round.rolled_back', {
       worldId: params.worldId,
       worldlineId: params.worldlineId,
       sceneId: params.sceneId,
       roundId: round.id,
-      data: { error: String(e) },
+      data: { error: String(e), isBudget },
     });
     return {
       roundId: round.id,
-      status: 'failed',
+      status: isBudget ? 'rolled_back' : 'failed',
       actionIds: [],
       eventIds: [],
-      auditFindings: [{ severity: 'critical', description: String(e) }],
+      auditFindings: [
+        {
+          severity: isBudget ? 'warning' : 'critical',
+          description: String(e),
+        },
+      ],
     };
   }
 }
