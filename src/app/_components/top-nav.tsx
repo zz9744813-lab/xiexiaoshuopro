@@ -8,11 +8,15 @@ const NAV = [
   { href: '/worlds', label: '世界' },
   { href: '/providers', label: 'Provider' },
   { href: '/profiles', label: 'Profile' },
+  { href: '/embedding-profiles', label: 'Embedding' },
+  { href: '/prompts', label: 'Prompt' },
   { href: '/characters', label: '角色' },
-  { href: '/simulation', label: '模拟控制台' },
+  { href: '/simulation', label: '模拟' },
+  { href: '/directives', label: '导演' },
+  { href: '/quality', label: '质量' },
   { href: '/chapters', label: '章节' },
   { href: '/traces', label: 'Trace' },
-  { href: '/memories', label: '记忆审批' },
+  { href: '/memories', label: '审批' },
   { href: '/cost', label: '成本' },
 ];
 

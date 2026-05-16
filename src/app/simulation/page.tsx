@@ -186,6 +186,39 @@ export default function SimulationPage() {
     }
   }
 
+  async function pauseScene() {
+    if (!activeSceneId) return;
+    const res = await fetch(`/api/scenes/${activeSceneId}/pause`, { method: 'POST' });
+    const json = await res.json();
+    if (json.ok) {
+      const d = json.data;
+      alert(
+        `已发送 pause 信号。\nactive=${d.pausedRoundIds.length}, orphan=${d.orphanRoundIds.length}`,
+      );
+      void loadSceneRounds();
+    } else alert(json.error?.message ?? 'pause 失败');
+  }
+
+  async function abortScene() {
+    if (!activeSceneId) return;
+    const discard = confirm(
+      '是否丢弃所有未提交的 round？\n确定 = 删除部分 actions、round 标 rolled_back\n取消 = 仅发送 abort 信号',
+    );
+    const res = await fetch(`/api/scenes/${activeSceneId}/abort`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ discard }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      const d = json.data;
+      alert(
+        `aborted=${d.abortedRoundIds.length}\ndiscarded_actions=${d.discardedActions}`,
+      );
+      void loadSceneRounds();
+    } else alert(json.error?.message ?? 'abort 失败');
+  }
+
   async function forkBranch() {
     const world = worlds.find((w) => w.id === worldId);
     if (!world?.defaultWorldlineId) return;
@@ -383,6 +416,22 @@ export default function SimulationPage() {
                     title="从当前 worldline 创建分支"
                   >
                     Fork
+                  </button>
+                  <button
+                    onClick={pauseScene}
+                    disabled={!activeSceneId}
+                    className="px-3 py-1 text-sm border rounded text-yellow-700 disabled:opacity-50"
+                    title="发送 abort 信号给所有 in-flight 调用"
+                  >
+                    Pause
+                  </button>
+                  <button
+                    onClick={abortScene}
+                    disabled={!activeSceneId}
+                    className="px-3 py-1 text-sm border rounded text-red-700 disabled:opacity-50"
+                    title="abort + 可选丢弃部分 actions"
+                  >
+                    Abort
                   </button>
                   <button
                     onClick={runRound}
