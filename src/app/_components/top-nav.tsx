@@ -13,6 +13,7 @@ const NAV = [
   { href: '/chapters', label: '章节' },
   { href: '/traces', label: 'Trace' },
   { href: '/memories', label: '记忆审批' },
+  { href: '/cost', label: '成本' },
 ];
 
 export function TopNav() {
