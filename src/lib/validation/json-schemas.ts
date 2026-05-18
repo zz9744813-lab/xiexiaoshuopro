@@ -83,7 +83,9 @@ export const worldAgentResultSchema = {
               summary: { type: 'string', maxLength: 2000 },
               involved_action_ids: {
                 type: 'array',
-                items: { type: 'string', format: 'uuid' },
+                // Accept opaque strings: engine feeds tmp-XXXX placeholders into
+                // world_agent input and remaps to real UUIDs during persistence.
+                items: { type: 'string', maxLength: 64 },
               },
               event_level: {
                 type: 'string',

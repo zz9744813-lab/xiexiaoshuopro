@@ -267,6 +267,19 @@ export async function runRoundSimultaneous(
       });
     }
 
+    // 4b. If every character fell back (all schema_error / infra error), fail the round.
+    // This surfaces the underlying problem instead of committing empty rounds.
+    if (prepared.length > 0 && prepared.every((p) => p.isFallback)) {
+      const reasons = auditFindings
+        .filter((f) => f.severity === "error" || f.severity === "critical")
+        .map((f) => f.description)
+        .slice(0, 3)
+        .join(" | ");
+      throw new Error(
+        "All characters failed (likely schema_error). " + (reasons || "no audit detail")
+      );
+    }
+
     // 5. Call world_agent (with intermediate "view" of prepared actions)
     const [worldAgent] = await db
       .select()
