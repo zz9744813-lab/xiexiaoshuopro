@@ -296,6 +296,17 @@ export async function callLLM(
 
   if (errorMessage) throw new Error(errorMessage);
 
+  // Schema validation failure must propagate so the engine can decide:
+  //   character_call -> silent fallback action (per spec section 21.4)
+  //   world_agent_call -> round-level failure
+  if (response && !validationOk) {
+    const err = new Error(
+      "Schema validation failed: " + validationErrors.join("; ")
+    ) as Error & { isSchemaError?: boolean };
+    err.isSchemaError = true;
+    throw err;
+  }
+
   return {
     response: response!,
     traceId: trace.id,
